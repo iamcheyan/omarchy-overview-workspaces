@@ -115,6 +115,12 @@ Item {
     property var windowByAddress: ServiceManager.workspace.windowByAddress
     property var monitorData: ServiceManager.workspace.monitors.find(m => m.id === root.monitor?.id)
 
+    // Where this surface sits in the global layout. Hyprland reports these in
+    // logical units, the same space QML uses inside the surface, so a local point
+    // becomes global by adding them -- no scale conversion involved.
+    readonly property real monitorOriginX: root.monitorData?.x ?? 0
+    readonly property real monitorOriginY: root.monitorData?.y ?? 0
+
     // ── Adaptive scaling ──
     // Overview (工作区概览): full-screen grid, auto-select optimal columns
     // Overview switching mode (Win+Tab): current-monitor preview, use config scale value
@@ -610,6 +616,87 @@ Item {
         }
     }
 
+    // Ghost of the window being dragged in from another monitor.
+    //
+    // The drag lives in the source surface and its item clips at that screen's
+    // edge, so without this the window simply vanishes and you are dropping by
+    // dead reckoning. The registry already carries the pointer in global
+    // coordinates; subtracting this monitor's origin puts the ghost under the
+    // real cursor. A live thumbnail is deliberately not used: it would mean a
+    // second ScreencopyView of a window already being captured on the other
+    // screen, and the point here is to show where the drop will land.
+    Rectangle {
+        id: crossDragProxy
+
+        readonly property var windowData: CrossMonitorDrag.active
+            ? (ServiceManager.workspace.windowByAddress?.[CrossMonitorDrag.windowAddress] ?? null)
+            : null
+
+        visible: CrossMonitorDrag.active
+            && CrossMonitorDrag.sourceMonitorName !== (root.monitor?.name ?? "")
+            && CrossMonitorDrag.pointerX >= root.monitorOriginX
+            && CrossMonitorDrag.pointerX <= root.monitorOriginX + root.width
+            && CrossMonitorDrag.pointerY >= root.monitorOriginY
+            && CrossMonitorDrag.pointerY <= root.monitorOriginY + root.height
+
+        width: Math.max(120, CrossMonitorDrag.sourceWidth)
+        height: Math.max(80, CrossMonitorDrag.sourceHeight)
+        x: CrossMonitorDrag.pointerX - root.monitorOriginX - width / 2
+        y: CrossMonitorDrag.pointerY - root.monitorOriginY - height / 2
+        z: root.windowDraggingZ + 10
+
+        radius: 8
+        color: Appearance.colors.colSurfaceContainerLow
+        border.width: 2
+        border.color: Appearance.colors.colOnLayer1
+        opacity: 0.85
+
+        // The window's own contents, so it reads as the window itself crossing
+        // rather than a placeholder standing in for it.
+        Image {
+            id: proxyPreview
+            anchors.fill: parent
+            anchors.margins: 2
+            source: CrossMonitorDrag.previewUrl
+            fillMode: Image.PreserveAspectCrop
+            smooth: true
+            cache: false
+            visible: status === Image.Ready
+        }
+
+        // Fallback for the moment before the first snapshot exists, or a window
+        // whose capture never produced one.
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 4
+            visible: !proxyPreview.visible
+
+            Image {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 32
+                Layout.preferredHeight: 32
+                source: AppSearch.iconSource(AppSearch.guessIcon(
+                    crossDragProxy.windowData?.class ?? crossDragProxy.windowData?.initialClass ?? ""))
+                fillMode: Image.PreserveAspectFit
+                visible: status === Image.Ready
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                text: crossDragProxy.windowData?.title
+                    ?? crossDragProxy.windowData?.initialTitle
+                    ?? ""
+                color: Appearance.colors.colOnLayer1
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                maximumLineCount: 2
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
     // Workspace grid — grouped by physical monitor in overview mode.
     Item {
         id: monitorGroupUnderlay
@@ -688,6 +775,14 @@ Item {
                     property color hoveredBorderColor: Appearance.colors.colLayer2Hover
                     property bool hoveredWhileDragging: false
 
+                    // A DropArea never fires on a surface the drag did not start in, so
+                    // the destination monitor would otherwise give no feedback at all.
+                    // The shared registry provides it.
+                    readonly property bool crossHovered: CrossMonitorDrag.active
+                        && CrossMonitorDrag.sourceMonitorName !== (root.monitor?.name ?? "")
+                        && CrossMonitorDrag.hoveredTarget?.id === workspace.workspaceValue
+                        && CrossMonitorDrag.hoveredTarget?.monitorName === (root.monitor?.name ?? "")
+
                     readonly property bool isFocused: workspaceValue === root.highlightedWorkspaceId
                     // In Original mode the Hyprland ID is only an internal
                     // transport key. The original Overview displayed the
@@ -698,11 +793,28 @@ Item {
                         ? root.globalSlotForWorkspaceId(workspace.workspaceValue)
                         : workspace.workspaceValue
 
+                    Connections {
+                        target: CrossMonitorDrag
+                        function onActiveChanged() {
+                            if (!CrossMonitorDrag.active)
+                                return;
+                            const p = workspace.mapToItem(null, 0, 0);
+                            CrossMonitorDrag.publishTarget(
+                                root.monitor?.name ?? "",
+                                workspace.workspaceValue,
+                                workspace.isTrailingEmpty,
+                                root.monitorOriginX + p.x,
+                                root.monitorOriginY + p.y,
+                                workspace.width,
+                                workspace.height);
+                        }
+                    }
+
                     x: root.entryX(index)
                     y: root.entryY(index)
                     width: root.entryWidth(index)
                     height: root.entryHeight(index)
-                    color: hoveredWhileDragging ? hoveredWorkspaceColor : defaultWorkspaceColor
+                    color: (hoveredWhileDragging || crossHovered) ? hoveredWorkspaceColor : defaultWorkspaceColor
                     topLeftRadius: root.largeWorkspaceRadius
                     topRightRadius: root.largeWorkspaceRadius
                     bottomLeftRadius: root.largeWorkspaceRadius
@@ -792,7 +904,7 @@ Item {
                     DropArea {
                         anchors.fill: parent
                         onEntered: {
-                            WorkspaceNavigation.setDragTarget(workspace.workspaceValue, workspace.isTrailingEmpty)
+                            WorkspaceNavigation.setDragTarget(workspace.workspaceValue, workspace.isTrailingEmpty, workspace.monitorName)
                             if (GlobalStates.overviewDraggingFromWorkspace == GlobalStates.overviewDraggingTargetWorkspace) return;
                             hoveredWhileDragging = true
                         }
@@ -947,23 +1059,76 @@ Item {
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                         drag.target: parent
                         onPressed: (mouse) => {
+                            // Middle click is the close shortcut, handled in
+                            // onClicked; it must not start a drag.
+                            if (mouse.button !== Qt.LeftButton)
+                                return;
                             window.snapshotPreview(false)
-                            WorkspaceNavigation.beginWindowDrag(window.windowData?.workspace.id)
+                            WorkspaceNavigation.beginWindowDrag(window.windowData?.workspace?.id)
+                            const press = dragArea.mapToItem(null, mouse.x, mouse.y)
+                            CrossMonitorDrag.begin(window.windowData?.address,
+                                window.windowData?.workspace?.id,
+                                root.monitor?.name ?? "",
+                                window.width, window.height,
+                                root.monitorOriginX + press.x,
+                                root.monitorOriginY + press.y)
+                            // Asynchronous, so the proxy shows its icon-and-title
+                            // fallback for the frame or two until this lands.
+                            window.grabPreview(result => CrossMonitorDrag.setPreview(result))
                             window.pressed = true
                             window.Drag.active = true
                             window.Drag.source = window
                             window.Drag.hotSpot.x = mouse.x
                             window.Drag.hotSpot.y = mouse.y
-                            // console.log(`[OverviewWindow] Dragging window ${windowData?.address} from position (${window.x}, ${window.y})`)
+                        }
+
+                        // The pointer grab keeps delivering motion after the cursor
+                        // leaves this surface, with coordinates outside our own
+                        // bounds. Publishing it in global coordinates is what makes
+                        // a drop on another monitor resolvable at all.
+                        onPositionChanged: (mouse) => {
+                            if (!window.pressed)
+                                return;
+                            const p = dragArea.mapToItem(null, mouse.x, mouse.y);
+                            CrossMonitorDrag.updatePointer(root.monitorOriginX + p.x,
+                                root.monitorOriginY + p.y);
                         }
                         onReleased: {
-                            const targetWorkspace = GlobalStates.overviewDraggingTargetWorkspace
-                            const targetIsTrailing = GlobalStates.overviewDraggingTargetIsTrailing
+                            // Only a press that actually started a drag gets here:
+                            // otherwise a middle click, which returns early above,
+                            // would still run the whole commit path.
+                            if (!window.pressed)
+                                return;
+                            // A DropArea only fires for the surface the pointer is over, so a
+                            // drop on another monitor never reaches the local state above.
+                            // Resolve it from the global registry and prefer it when it points
+                            // somewhere else than where the drag started.
+                            const crossTarget = CrossMonitorDrag.hoveredTarget
+                            const useCross = !!crossTarget && crossTarget.monitorName !== (root.monitor?.name ?? "")
+                            const targetWorkspace = useCross
+                                ? crossTarget.id
+                                : GlobalStates.overviewDraggingTargetWorkspace
+                            const targetIsTrailing = useCross
+                                ? crossTarget.isTrailing
+                                : GlobalStates.overviewDraggingTargetIsTrailing
+                            // The monitor the target workspace belongs to, not the one
+                            // drawing it: with per-monitor preview off every overlay
+                            // draws every workspace, so a card for another screen's
+                            // workspace sits on this one, and naming this overlay's
+                            // monitor would drag that workspace over here instead.
+                            //
+                            // Read here, alongside the other two, because clearing
+                            // Drag.active below makes the DropArea fire onExited,
+                            // which wipes this state before the commit runs.
+                            const dropMonitor = useCross
+                                ? crossTarget.monitorName
+                                : GlobalStates.overviewDraggingTargetMonitor
+                            CrossMonitorDrag.end()
                             window.pressed = false
                             window.holdCurrentPosition()
                             window.Drag.active = false
                             window.restorePositionBinding()
-                            if (WorkspaceNavigation.commitWindowDrag(window.windowData?.address, window.windowData?.workspace.id, targetWorkspace, targetIsTrailing)) {
+                            if (WorkspaceNavigation.commitWindowDrag(window.windowData?.address, window.windowData?.workspace?.id, targetWorkspace, targetIsTrailing, dropMonitor)) {
                                 window.releaseHeldPosition()
                                 return
                             }

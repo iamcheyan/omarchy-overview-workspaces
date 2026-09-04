@@ -35,6 +35,9 @@ Singleton {
     property int overviewDraggingFromWorkspace: -1
     property int overviewDraggingTargetWorkspace: -1
     property bool overviewDraggingTargetIsTrailing: false
+    // Monitor the target workspace belongs to, which is not the monitor drawing
+    // it: with per-monitor preview off, every overlay draws every workspace.
+    property string overviewDraggingTargetMonitor: ""
     property var overviewSuppressedEmptyWorkspaceIds: []
     property var overviewPendingWorkspaceMonitorById: ({})
     property var overviewPendingOccupiedWorkspaces: []

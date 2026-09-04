@@ -189,6 +189,21 @@ Item { // Window
         root.snapshotPreview(false);
     }
 
+    // Grabs the same item the freeze frame uses, for callers that hold the image
+    // themselves. freezeUrl cannot serve that purpose: it only keeps file: URLs,
+    // while grabToImage hands back an in-memory one.
+    //
+    // Deliberately without snapshotPreview's `previewHost.window` check. Quickshell
+    // backs these overlays with its own window class, so an Item's `window` is
+    // null here even with the overview on screen and capturing -- that guard never
+    // passes. Callers of this are already inside an interaction, so the context is
+    // live by construction.
+    function grabPreview(callback) {
+        if (!root.anyPreviewContent)
+            return false;
+        return previewHost.grabToImage(callback);
+    }
+
     function snapshotPreview() {
         // The overview tree stays instantiated while hidden so it can retain
         // thumbnails, but hidden items do not have a valid capture context
