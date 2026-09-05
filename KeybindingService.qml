@@ -79,7 +79,11 @@ Item {
         commands.push('hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
         for (const key of root.interruptKeys) {
             commands.push(`hl.bind("SUPER + CTRL + ${key}", hl.dsp.global("quickshell:superInterrupt"), { non_consuming = true, transparent = true, description = "Overview Ctrl+Super interrupt" })`);
-            commands.push(`hl.bind("SUPER + ${key}", hl.dsp.global("quickshell:superInterrupt"), { ignore_mods = true, non_consuming = true, transparent = true, description = "Overview Super interrupt" })`);
+            // Keep this exact-modifier only. `ignore_mods` also matches native
+            // SUPER+ALT/SHIFT/CTRL shortcuts (for example Omarchy's app and
+            // terminal launchers), so the overview would consume shortcuts it
+            // does not own.
+            commands.push(`hl.bind("SUPER + ${key}", hl.dsp.global("quickshell:superInterrupt"), { non_consuming = true, transparent = true, description = "Overview Super interrupt" })`);
         }
         // Native mode does not own Win+number. Never unbind or recreate those
         // keys there; they may be user-defined rather than Omarchy defaults.
