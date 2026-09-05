@@ -49,6 +49,8 @@ omarchy plugin add https://github.com/iamcheyan/omarchy-overview-workspaces.git 
 
 After enabling, the plugin registers its Hyprland bindings automatically. Users do not need to edit `~/.config/hypr/bindings.lua`.
 
+Enabling automatically replaces the built-in workspace indicator; disabling restores it through Omarchy's native replacement mechanism. Existing layouts containing both indicators are cleaned up automatically when the plugin loads.
+
 ### Ordering modes
 
 Open the gear button in the top bar to choose a mode.
@@ -153,6 +155,8 @@ omarchy plugin add https://github.com/iamcheyan/omarchy-overview-workspaces.git 
 
 启用后插件会自动注册 Hyprland 快捷键，用户不需要手动修改 `~/.config/hypr/bindings.lua`。
 
+启用时会自动替换原生工作区指示器，禁用时由 Omarchy 恢复原生组件。旧配置若同时包含两种指示器，插件加载后会自动清理重复项。
+
 ### 排序模式
 
 点击顶部栏齿轮按钮选择模式。
@@ -254,6 +258,8 @@ omarchy plugin add https://github.com/iamcheyan/omarchy-overview-workspaces.git 
 ```
 
 有効化後、Hyprland のショートカットは自動登録されます。`~/.config/hypr/bindings.lua` を手動編集する必要はありません。
+
+有効化すると標準のワークスペース表示を自動的に置き換え、無効化すると Omarchy が標準表示を復元します。既存の設定で両方が表示されている場合も、プラグインの読み込み時に重複を自動的に解消します。
 
 ### 並び順モード
 

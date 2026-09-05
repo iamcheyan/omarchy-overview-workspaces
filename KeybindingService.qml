@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import "WorkspaceBarConfig.js" as WorkspaceBarConfig
 
 Item {
     id: root
@@ -87,6 +88,15 @@ Item {
     function applyBindings() {
         if (!root.shell)
             return;
+        // Use the shell's config writer, and only write when an old layout
+        // actually contains both widgets. New installs use clonedFrom.
+        const configCopy = JSON.parse(JSON.stringify(root.shell.shellConfig ?? {}));
+        if (WorkspaceBarConfig.removeDuplicateNativeWidget(configCopy)
+                && typeof root.shell.mutateShellConfig === "function") {
+            root.shell.mutateShellConfig(function(config) {
+                WorkspaceBarConfig.removeDuplicateNativeWidget(config);
+            });
+        }
         const mode = root.configuredMode();
         if (mode === "") {
             if (root.appliedMode !== "") {

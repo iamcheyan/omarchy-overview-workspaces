@@ -2,11 +2,14 @@
   "schemaVersion": 1,
   "id": "hancore.overview-workspaces",
   "name": "Overview Workspaces",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Omarchy workspace experience enhancement with live thumbnails, dynamic and native ordering, drag-and-drop, and automatic Win-key integration.",
   "keepLoaded": true,
+  "omarchy": {
+    "clonedFrom": "omarchy.workspaces"
+  },
   "kinds": ["panel", "bar-widget", "service"],
   "entryPoints": {
     "panel": "Overview.qml",
