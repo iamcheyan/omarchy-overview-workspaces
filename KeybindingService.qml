@@ -11,6 +11,16 @@ Item {
     property string appliedMode: ""
     property bool restoring: false
 
+    // Hyprland removes runtime bindings while processing `configreloaded`.
+    // Reinstall after the reload has settled, otherwise the service can keep
+    // its old appliedMode while all plugin-owned bindings are gone.
+    Timer {
+        id: reapplyAfterReload
+        interval: 250
+        repeat: false
+        onTriggered: root.applyBindings()
+    }
+
     // These bindings only notify the shell that Super is being used with
     // another key. They are deliberately non-consuming, so the native
     // application binding (Win+Space, Win+Enter, etc.) still runs.
@@ -162,7 +172,7 @@ Item {
                 return;
             root.appliedMode = "";
             root.restoring = false;
-            Qt.callLater(root.applyBindings);
+            reapplyAfterReload.restart();
         }
     }
 
