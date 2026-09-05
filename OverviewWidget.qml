@@ -947,7 +947,7 @@ Item {
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                         drag.target: parent
                         onPressed: (mouse) => {
-                            window.snapshotPreview(false)
+                            window.snapshotPreview()
                             WorkspaceNavigation.beginWindowDrag(window.windowData?.workspace.id)
                             window.pressed = true
                             window.Drag.active = true
@@ -1086,9 +1086,6 @@ Item {
             visible: GlobalStates.overviewOpen && infoTitle.length > 0
             opacity: visible ? 1 : 0
 
-            Behavior on x { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-            Behavior on y { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-            Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
             Rectangle {
                 anchors.fill: parent

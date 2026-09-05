@@ -149,6 +149,8 @@ Item { // Window
     property bool slot0Armed: false
     property bool slot1Armed: false
     property url freezeUrl: ""
+    property var freezeResult: null
+    property bool snapshotPending: false
     property var captureToplevel: null
     readonly property bool anyPreviewContent: preview0.hasContent || preview1.hasContent
     readonly property bool showingFreeze: !root.anyPreviewContent && root.freezeUrl != ""
@@ -186,22 +188,26 @@ Item { // Window
             root.slot1Armed = false;
         else
             root.slot0Armed = false;
-        root.snapshotPreview(false);
+        root.snapshotPreview();
     }
 
     function snapshotPreview() {
-        // The overview tree stays instantiated while hidden so it can retain
-        // thumbnails, but hidden items do not have a valid capture context
-        // during shell startup/resume.  Calling grabToImage() there can return
-        // an itemgrabber:// URL which QtQuick.Image cannot load.
+        // Keep the ItemGrabResult alive: its URL is an in-memory Qt image key,
+        // not a file path. Take backups on first content and drag/move only.
         if (!root.captureActive || !root.visible || !root.anyPreviewContent
-            || !previewHost.window)
+            || !previewHost.window || root.snapshotPending)
             return;
-        previewHost.grabToImage(result => {
+        root.snapshotPending = true;
+        const accepted = previewHost.grabToImage(result => {
+            root.snapshotPending = false;
             const url = String(result?.url ?? "");
-            if (root.captureActive && root.visible && url.startsWith("file:"))
+            if (root.captureActive && root.visible && url.length > 0) {
+                root.freezeResult = result;
                 root.freezeUrl = url;
+            }
         });
+        if (!accepted)
+            root.snapshotPending = false;
     }
 
     onToplevelChanged: root.rememberToplevel()
@@ -226,16 +232,9 @@ Item { // Window
             root.slot1Armed = false;
             root.captureAttempt = 0;
             root.freezeUrl = "";
+            root.freezeResult = null;
             root.everHadContent = false;
         }
-    }
-
-    Timer {
-        id: freezeTimer
-        interval: 400
-        repeat: true
-        running: root.captureActive && root.anyPreviewContent
-        onTriggered: root.snapshotPreview()
     }
 
     Timer {

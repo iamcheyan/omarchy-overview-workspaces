@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import "." as Local
 import "WorkspaceBarConfig.js" as WorkspaceBarConfig
 
 Item {
@@ -10,6 +11,7 @@ Item {
     property var shell: null
     property string appliedMode: ""
     property bool restoring: false
+    property bool mouseGuarded: false
 
     readonly property var interruptKeys: [
         "RETURN", "TAB", "SPACE", "BACKSPACE", "ESCAPE",
@@ -43,6 +45,7 @@ Item {
     // and leave Wayland clients without input.
     function bindingScript(optimized) {
         const commands = [
+            'hl.layer_rule({ name = "overview-instant", match = { namespace = "^quickshell:overview$" }, no_anim = true, animation = "none" })',
             'hl.unbind("SUPER_L")',
             'hl.unbind("SUPER_R")',
             'hl.unbind("SUPER + SUPER_L")',
@@ -109,6 +112,34 @@ Item {
             return;
         Quickshell.execDetached(["hyprctl", "eval", root.bindingScript(mode === "legacy")]);
         root.appliedMode = mode;
+        root.applyMouseGuard();
+    }
+
+    // Omarchy's tiling defaults use SUPER+mouse:272/273 to move/resize the
+    // real focused window. While our overlay is open those bindings must be
+    // absent: a drag beginning on an Overview preview must stay inside the
+    // overlay and never reach the underlying window.
+    function mouseBindingScript(guarded) {
+        const commands = [
+            'hl.unbind("SUPER + mouse:272")',
+            'hl.unbind("SUPER + mouse:273")'
+        ];
+        if (!guarded) {
+            commands.push('hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Move window" })');
+            commands.push('hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })');
+        }
+        return commands.join("; ");
+    }
+
+    function applyMouseGuard() {
+        if (!root.shell || root.configuredMode() === "")
+            return;
+        const guarded = Local.GlobalStates.overviewOpen
+            || (Local.GlobalStates.overviewSwitchingController?.grabbed === true);
+        if (guarded === root.mouseGuarded)
+            return;
+        root.mouseGuarded = guarded;
+        Quickshell.execDetached(["hyprctl", "eval", root.mouseBindingScript(guarded)]);
     }
 
     function restoreBindings() {
@@ -129,7 +160,10 @@ Item {
             commands.push(`hl.unbind("SUPER + CTRL + ${key}")`);
             commands.push(`hl.unbind("SUPER + ${key}")`);
         }
+        commands.push('hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Move window" })');
+        commands.push('hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })');
         Quickshell.execDetached(["hyprctl", "eval", commands.join("; ")]);
+        root.mouseGuarded = false;
     }
 
     Component.onCompleted: Qt.callLater(root.applyBindings)
@@ -140,6 +174,16 @@ Item {
         function onShellConfigChanged() {
             Qt.callLater(root.applyBindings);
         }
+    }
+
+    Connections {
+        target: Local.GlobalStates
+        function onOverviewOpenChanged() { Qt.callLater(root.applyMouseGuard); }
+    }
+
+    Connections {
+        target: Local.GlobalStates.overviewSwitchingController
+        function onGrabbedChanged() { Qt.callLater(root.applyMouseGuard); }
     }
 
     // These bindings live only in Hyprland's runtime, so anything that makes it

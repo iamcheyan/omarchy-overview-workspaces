@@ -519,16 +519,18 @@ Singleton {
     // (e.g. when the overview layer appears: activewindow, focusedmon,
     // movewindow, …). Without coalescing, each event spawned 6 hyprctl
     // children that raced the overview's own render + ScreencopyView capture.
-    // Restarting this timer collapses a burst into a single updateAll().
+    // Schedule at most one refresh per frame. Do not restart an active timer:
+    // sustained event traffic must not keep postponing fresh window data.
     Timer {
         id: dataRefreshTimer
-        interval: 60
+        interval: 16
         repeat: false
         onTriggered: root.updateAll()
     }
 
     function scheduleRefresh() {
-        dataRefreshTimer.restart()
+        if (!dataRefreshTimer.running)
+            dataRefreshTimer.start()
     }
 
     function markDataChanged() {

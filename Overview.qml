@@ -245,10 +245,6 @@ Scope {
                 color: ColorUtils.transparentize(Color.background, 0.25)
                 visible: GlobalStates.overviewOpen
 
-                Behavior on opacity {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-                }
-
                 // Click scrim to close
                 MouseArea {
                     anchors.fill: parent
@@ -446,9 +442,11 @@ Scope {
                     // ScreencopyView; after suspend/resume that hidden tree can
                     // keep the shell's main thread busy and can lose its capture
                     // context. Recreate it when Overview opens instead.
-                    asynchronous: true
+                    // Build the grid in this turn instead of spreading its
+                    // delegates across frames after the scrim is already shown.
+                    asynchronous: false
                     active: (Config?.options.overview.enable ?? true)
-                        && GlobalStates.overviewOpen
+                        && panelWindow.visible
                     sourceComponent: OverviewWidget {
                         screen: panelWindow.screen
                         searchQuery: ""
