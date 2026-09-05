@@ -34,7 +34,7 @@ Singleton {
                 || Hyprland.focusedMonitor?.name
                 || "";
             if (anchor.length > 0) {
-                const scoped = ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(anchor, true, {}, false);
+                const scoped = ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(anchor, true, {}, false, true);
                 if (scoped.length > 0)
                     return scoped;
             }
@@ -46,7 +46,7 @@ Singleton {
         const monitorName = GlobalStates.overviewAnchorMonitorName || Hyprland.focusedMonitor?.name || "";
         // Win+Tab is a transient switcher, so it intentionally keeps MRU order.
         // Normal Overview uses WorkspaceOrder's persistent visual order.
-        let model = ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(monitorName, true, {}, true);
+        let model = ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(monitorName, true, {}, true, false);
         if (model.length === 0)
             model = ServiceManager.workspace.overviewWorkspaceEntriesGlobal(true).filter(entry => !entry.isTrailingEmpty);
         return model;
@@ -234,7 +234,6 @@ Singleton {
             }
         }
 
-        ServiceManager.workspace.updateAll();
         GlobalStates.refreshOverviewModel();
         root.pendingDragRefreshes = 4;
         refreshAfterDragTimer.restart();
@@ -249,4 +248,3 @@ Singleton {
         Hyprland.dispatch(`hl.dsp.focus({window = "address:${windowData.address}"})`);
     }
 }
-

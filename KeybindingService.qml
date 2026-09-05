@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
-import "." as Local
 import "WorkspaceBarConfig.js" as WorkspaceBarConfig
 
 Item {
@@ -11,8 +10,10 @@ Item {
     property var shell: null
     property string appliedMode: ""
     property bool restoring: false
-    property bool mouseGuarded: false
 
+    // These bindings only notify the shell that Super is being used with
+    // another key. They are deliberately non-consuming, so the native
+    // application binding (Win+Space, Win+Enter, etc.) still runs.
     readonly property var interruptKeys: [
         "RETURN", "TAB", "SPACE", "BACKSPACE", "ESCAPE",
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -33,16 +34,31 @@ Item {
                     return entry.sortMode === "system" ? "system" : "legacy";
             }
         }
-        // This plugin's primary enable/disable switch is its bar entry. The
-        // registry removes that entry when a bar-widget is disabled, even if
-        // an old top-level plugins[] record remains for the service kind.
         return "";
     }
 
-    // Build one Lua transaction. The old implementation spawned more than a
-    // hundred hyprctl children and also reloaded Hyprland during component
-    // creation/destruction. Plugin rescans could therefore race the compositor
-    // and leave Wayland clients without input.
+    // Workspace number keys are the only normal bindings this plugin owns.
+    // The interrupt bindings below are non-consuming observers: they preserve
+    // the native SUPER+letter/SPACE/RETURN action while cancelling the
+    // Super-alone Overview release action.
+    function workspaceNumberCommands(optimized) {
+        const commands = [];
+        for (let slot = 1; slot <= 10; ++slot) {
+            const keycode = slot + 9;
+            commands.push(`hl.unbind("SUPER + code:${keycode}")`);
+            if (optimized) {
+                commands.push(`hl.bind("SUPER + code:${keycode}", hl.dsp.global("quickshell:workspaceSlot${slot}"), { description = "Overview workspace slot ${slot}" })`);
+            } else {
+                commands.push(`hl.bind("SUPER + code:${keycode}", hl.dsp.focus({ workspace = "${slot}" }), { description = "Switch to workspace ${slot}" })`);
+            }
+        }
+        return commands;
+    }
+
+    function nativeWorkspaceNumberCommands() {
+        return root.workspaceNumberCommands(false);
+    }
+
     function bindingScript(optimized) {
         const commands = [
             'hl.layer_rule({ name = "overview-instant", match = { namespace = "^quickshell:overview$" }, no_anim = true, animation = "none" })',
@@ -53,46 +69,28 @@ Item {
             'hl.unbind("SUPER + TAB")',
             'hl.unbind("SUPER + SHIFT + TAB")'
         ];
-        for (let slot = 1; slot <= 10; ++slot) {
-            const keycode = slot + 9;
-            commands.push(`hl.unbind("SUPER + code:${keycode}")`);
-        }
-        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { ignore_mods = true, transparent = true, description = "Overview Super state" })');
-        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { ignore_mods = true, transparent = true, description = "Overview Super state" })');
-        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { ignore_mods = true, transparent = true, release = true, description = "Overview Super state" })');
-        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { ignore_mods = true, transparent = true, release = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, release = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, release = true, description = "Overview Super state" })');
         commands.push('hl.bind("SUPER + TAB", hl.dsp.global("quickshell:overviewNext"), { description = "Overview workspace next" })');
         commands.push('hl.bind("SUPER + SHIFT + TAB", hl.dsp.global("quickshell:overviewPrev"), { description = "Overview workspace previous" })');
         commands.push('hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
         commands.push('hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
-
-        // Both modes need the interrupt guard so Win+application shortcuts do
-        // not accidentally toggle Overview when Win is released.
-        // keyd presents a remapped CapsLock as a real Ctrl modifier.  Keep an
-        // exact Ctrl+Super interrupt ahead of the legacy ignore_mods rule;
-        // otherwise the generic Super+X rule can win and open Overview for a
-        // shortcut that is meant for another service (for example Voxtype).
-        for (const key of root.interruptKeys)
+        for (const key of root.interruptKeys) {
             commands.push(`hl.bind("SUPER + CTRL + ${key}", hl.dsp.global("quickshell:superInterrupt"), { non_consuming = true, transparent = true, description = "Overview Ctrl+Super interrupt" })`);
-
-        for (const key of root.interruptKeys)
             commands.push(`hl.bind("SUPER + ${key}", hl.dsp.global("quickshell:superInterrupt"), { ignore_mods = true, non_consuming = true, transparent = true, description = "Overview Super interrupt" })`);
-
-        if (optimized) {
-            for (let slot = 1; slot <= 10; ++slot) {
-                const keycode = slot + 9;
-                commands.push(`hl.unbind("SUPER + code:${keycode}")`);
-                commands.push(`hl.bind("SUPER + code:${keycode}", hl.dsp.global("quickshell:workspaceSlot${slot}"), { description = "Overview workspace slot ${slot}" })`);
-            }
         }
-        return commands.join("; ");
+        // Native mode does not own Win+number. Never unbind or recreate those
+        // keys there; they may be user-defined rather than Omarchy defaults.
+        return optimized
+            ? commands.concat(root.workspaceNumberCommands(true)).join("; ")
+            : commands.join("; ");
     }
 
     function applyBindings() {
         if (!root.shell)
             return;
-        // Use the shell's config writer, and only write when an old layout
-        // actually contains both widgets. New installs use clonedFrom.
         const configCopy = JSON.parse(JSON.stringify(root.shell.shellConfig ?? {}));
         if (WorkspaceBarConfig.removeDuplicateNativeWidget(configCopy)
                 && typeof root.shell.mutateShellConfig === "function") {
@@ -110,36 +108,9 @@ Item {
         }
         if (root.appliedMode === mode)
             return;
+        root.restoring = false;
         Quickshell.execDetached(["hyprctl", "eval", root.bindingScript(mode === "legacy")]);
         root.appliedMode = mode;
-        root.applyMouseGuard();
-    }
-
-    // Omarchy's tiling defaults use SUPER+mouse:272/273 to move/resize the
-    // real focused window. While our overlay is open those bindings must be
-    // absent: a drag beginning on an Overview preview must stay inside the
-    // overlay and never reach the underlying window.
-    function mouseBindingScript(guarded) {
-        const commands = [
-            'hl.unbind("SUPER + mouse:272")',
-            'hl.unbind("SUPER + mouse:273")'
-        ];
-        if (!guarded) {
-            commands.push('hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Move window" })');
-            commands.push('hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })');
-        }
-        return commands.join("; ");
-    }
-
-    function applyMouseGuard() {
-        if (!root.shell || root.configuredMode() === "")
-            return;
-        const guarded = Local.GlobalStates.overviewOpen
-            || (Local.GlobalStates.overviewSwitchingController?.grabbed === true);
-        if (guarded === root.mouseGuarded)
-            return;
-        root.mouseGuarded = guarded;
-        Quickshell.execDetached(["hyprctl", "eval", root.mouseBindingScript(guarded)]);
     }
 
     function restoreBindings() {
@@ -154,16 +125,16 @@ Item {
             'hl.unbind("SUPER + TAB")',
             'hl.unbind("SUPER + SHIFT + TAB")'
         ];
-        for (let slot = 1; slot <= 10; ++slot)
-            commands.push(`hl.unbind("SUPER + code:${slot + 9}")`);
         for (const key of root.interruptKeys) {
             commands.push(`hl.unbind("SUPER + CTRL + ${key}")`);
             commands.push(`hl.unbind("SUPER + ${key}")`);
         }
-        commands.push('hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Move window" })');
-        commands.push('hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })');
+        if (root.appliedMode === "legacy")
+            for (const command of root.nativeWorkspaceNumberCommands())
+                commands.push(command);
+        commands.push('hl.bind("SUPER + TAB", hl.dsp.focus({ workspace = "e+1" }), { description = "Next workspace" })');
+        commands.push('hl.bind("SUPER + SHIFT + TAB", hl.dsp.focus({ workspace = "e-1" }), { description = "Previous workspace" })');
         Quickshell.execDetached(["hyprctl", "eval", commands.join("; ")]);
-        root.mouseGuarded = false;
     }
 
     Component.onCompleted: Qt.callLater(root.applyBindings)
@@ -177,31 +148,16 @@ Item {
     }
 
     Connections {
-        target: Local.GlobalStates
-        function onOverviewOpenChanged() { Qt.callLater(root.applyMouseGuard); }
-    }
-
-    Connections {
-        target: Local.GlobalStates.overviewSwitchingController
-        function onGrabbedChanged() { Qt.callLater(root.applyMouseGuard); }
-    }
-
-    // These bindings live only in Hyprland's runtime, so anything that makes it
-    // re-read its config wipes them: a theme change, `omarchy refresh`, editing a
-    // .lua file, or a monitor hotplug (hypr-monitor-arrange reloads to re-detect
-    // displays). Until now nothing re-registered them, so Super fell back to
-    // Omarchy's own menu until the shell was restarted by hand.
-    Connections {
         target: Hyprland
 
         function onRawEvent(event) {
             if (event?.name !== "configreloaded")
                 return;
-            // The reload already dropped the bindings, but appliedMode still says
-            // they are installed and applyBindings() would return early. Clearing
-            // it is what makes the re-registration actually run.
             root.appliedMode = "";
+            root.restoring = false;
             Qt.callLater(root.applyBindings);
         }
     }
+
+    Component.onDestruction: root.restoreBindings()
 }

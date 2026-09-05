@@ -14,9 +14,7 @@ import "ColorUtils.js" as ColorUtils
 Scope {
     id: overviewScope
 
-    // Omarchy's panel host calls these methods for `shell summon/hide/toggle`.
-    // The original Sumika process drove the same state through its own IPC
-    // handler, so expose the lifecycle explicitly at the plugin boundary.
+    // Omarchy's panel host calls these for `shell summon/hide/toggle`.
     function open(payload) {
         GlobalStates.overviewWarmStart = false;
         GlobalStates.overviewOpen = true;
@@ -244,6 +242,11 @@ Scope {
                 anchors.fill: parent
                 color: ColorUtils.transparentize(Color.background, 0.25)
                 visible: GlobalStates.overviewOpen
+                opacity: GlobalStates.overviewOpen ? 1 : 0
+
+                Behavior on opacity {
+                    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                }
 
                 // Click scrim to close
                 MouseArea {
@@ -267,11 +270,6 @@ Scope {
 
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) {
-                        if (overviewSearch.menuOpen) {
-                            overviewSearch.menuOpen = false;
-                            event.accepted = true;
-                            return;
-                        }
                         if (GlobalStates.overviewSearchMode) {
                             GlobalStates.overviewSearchMode = false;
                             overviewScope.overviewFilterQuery = "";
@@ -433,6 +431,14 @@ Scope {
                 id: overviewContainer
                 anchors.fill: parent
                 visible: GlobalStates.overviewOpen
+                // Do not paint the half-built grid. The loader is synchronous
+                // so the workspace geometry is ready before the first frame;
+                // the short fade hides the remaining capture startup frame.
+                opacity: GlobalStates.overviewOpen && overviewLoader.status === Loader.Ready ? 1 : 0
+
+                Behavior on opacity {
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
 
                 Loader {
                     id: overviewLoader
@@ -442,14 +448,15 @@ Scope {
                     // ScreencopyView; after suspend/resume that hidden tree can
                     // keep the shell's main thread busy and can lose its capture
                     // context. Recreate it when Overview opens instead.
-                    // Build the grid in this turn instead of spreading its
-                    // delegates across frames after the scrim is already shown.
+                    // Keep ScreencopyView alive only while Overview is open.
+                    // Leaving it mounted behind the panel causes capture
+                    // contexts to compete with the desktop and fail during
+                    // drag/move operations.
                     asynchronous: false
                     active: (Config?.options.overview.enable ?? true)
-                        && panelWindow.visible
+                        && GlobalStates.overviewOpen
                     sourceComponent: OverviewWidget {
                         screen: panelWindow.screen
-                        searchQuery: ""
                         visible: GlobalStates.overviewOpen
                     }
                 }
@@ -476,62 +483,6 @@ Scope {
             }
 
         }
-        }
-    }
-
-    IpcHandler {
-        target: "overview"
-
-        function toggle() {
-            GlobalStates.overviewWarmStart = false;
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-        }
-        function workspacesToggle() {
-            GlobalStates.overviewWarmStart = false;
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-        }
-        function close() {
-            GlobalStates.overviewOpen = false;
-        }
-        function open() {
-            GlobalStates.overviewWarmStart = false;
-            GlobalStates.overviewOpen = true;
-        }
-        function toggleReleaseInterrupt() {
-            GlobalStates.superReleaseMightTrigger = false;
-        }
-        function superDown() {
-            GlobalStates.superDown = true;
-            GlobalStates.superReleaseMightTrigger = true;
-        }
-        function superUp() {
-            GlobalStates.superDown = false;
-            if (GlobalStates.overviewWarmStart) {
-                GlobalStates.superReleaseMightTrigger = false;
-                return;
-            }
-            if (GlobalStates.superReleaseMightTrigger) {
-                GlobalStates.superReleaseMightTrigger = false;
-                if (!GlobalStates.overviewOpen)
-                    GlobalStates.overviewOpen = true;
-                else if (GlobalStates.overviewSearchMode) {
-                    GlobalStates.overviewSearchMode = false;
-                    overviewScope.overviewFilterQuery = "";
-                } else if (!OverviewSwitchingController.grabbed)
-                    GlobalStates.overviewOpen = false;
-            }
-        }
-        function overviewNext() {
-            GlobalStates.superReleaseMightTrigger = false;
-            overviewScope.openGrabbedMode(1);
-        }
-        function overviewPrev() {
-            GlobalStates.superReleaseMightTrigger = false;
-            overviewScope.openGrabbedMode(-1);
-        }
-        function overviewCommit() {
-            GlobalStates.superReleaseMightTrigger = false;
-            overviewScope.commitGrabbedMode();
         }
     }
 
