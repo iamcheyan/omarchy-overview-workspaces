@@ -8,9 +8,7 @@ singleton FileUtils 1.0 FileUtils.qml
 singleton GlobalFocusGrab 1.0 GlobalFocusGrab.qml
 singleton GlobalStates 1.0 GlobalStates.qml
 singleton HyprlandData 1.0 HyprlandData.qml
-singleton ModuleLoader 1.0 ModuleLoader.qml
 singleton OmarchyTheme 1.0 OmarchyTheme.qml
-singleton Persistent 1.0 Persistent.qml
 singleton ServiceManager 1.0 ServiceManager.qml
 singleton TuiStyle 1.0 TuiStyle.qml
 singleton Wallpaper 1.0 Wallpaper.qml
@@ -19,10 +17,7 @@ singleton WorkspaceNavigation 1.0 WorkspaceNavigation.qml
 singleton OverviewSwitchingController 1.0 OverviewSwitchingController.qml
 Overview 1.0 Overview.qml
 OverviewSearch 1.0 OverviewSearch.qml
-OverviewSwitchingController 1.0 OverviewSwitchingController.qml
 OverviewWidget 1.0 OverviewWidget.qml
 OverviewWindow 1.0 OverviewWindow.qml
-WorkspaceNavigation 1.0 WorkspaceNavigation.qml
 StyledText 1.0 StyledText.qml
 StyledImage 1.0 StyledImage.qml
-MaterialSymbol 1.0 MaterialSymbol.qml

@@ -14,15 +14,7 @@ Singleton {
     readonly property int maximumWorkspaceId: 100
     readonly property string statePath: `${Directories.stateHome}/workspace-order.json`
     readonly property string currentInstanceSignature: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") ?? ""
-    // SUMIKA_APP_DIR was the upstream Sumika shell's writer election: the
-    // instance whose app dir ended in /modules/overview owned the file. The
-    // Omarchy shell never sets it, so an unset marker means this plugin owns
-    // its own state.
-    readonly property string appDirectory: Quickshell.env("SUMIKA_APP_DIR") ?? ""
-    readonly property bool isWriter: {
-        const normalized = root.appDirectory.replace(/\/+$/, "");
-        return normalized === "" || normalized.endsWith("/modules/overview");
-    }
+    readonly property bool isWriter: true
 
     property bool ready: false
     property var monitorOrders: ({})

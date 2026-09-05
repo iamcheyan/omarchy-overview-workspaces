@@ -56,4 +56,4 @@ security audit.
 - [x] Persistent.qml 经核实**并非死代码**（OverviewWindow.qml:127 在消费），保留；
       Config.qml `arbitraryRaceConditionDelay=50` 为既有时序参数，不动。
 - [x] 无 pkexec/sudo/keyd 类特权面；hyprctl 全部用户态 detached 运行。
-- [ ] 无测试目录——#1428 带回归测试的修复被接受最快，建议后续补关键路径测试。
+- [x] 已有 `tests/menu-index.test.js` 与 `tests/workspace-bar-config.test.js`。绑定脚本、系统/优化排序、trailing id、pending 搬家仍是手工回归。

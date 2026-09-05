@@ -11,7 +11,6 @@ Item {
 
     property string query: ""
     property bool searchMode: false
-    property bool menuOpen: false
     property int selectedIndex: 0
     property int maxAppResults: 5
     property int maxWindowResults: 7

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.overview-workspaces",
   "name": "Overview Workspaces",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Omarchy workspace experience enhancement with live thumbnails, dynamic and native ordering, drag-and-drop, and automatic Win-key integration.",

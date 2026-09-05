@@ -26,12 +26,4 @@ QtObject {
         property int large: 0
         property int verysmall: 0
     }
-    readonly property QtObject animation: QtObject {
-        readonly property QtObject elementMoveEnter: QtObject {
-            readonly property QtObject numberAnimation: QtObject { function createObject(parent) { return null } }
-        }
-        readonly property QtObject elementMoveFast: QtObject {
-            readonly property QtObject numberAnimation: QtObject { function createObject(parent) { return null } }
-        }
-    }
 }

@@ -11,7 +11,7 @@ Panel {
 
     property var anchorItem: null
     property var hostWidget: null
-    readonly property string pluginVersion: "0.1.3"
+    readonly property string pluginVersion: "0.1.7"
     readonly property color panelForeground: Color.popups.text
     readonly property color panelMuted: Util.alpha(Color.popups.text, 0.58)
 

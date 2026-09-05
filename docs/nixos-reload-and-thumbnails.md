@@ -15,8 +15,8 @@
 
 - 插件生命周期不再调用 `hyprctl reload`；
 - 加载时把所有绑定合并到一次 `hyprctl eval`；
-- 组件销毁时不再自动修改 Hyprland；
-- Overview 不再修改全局 Super+鼠标绑定。
+- 禁用或销毁时只清理插件自己拥有的运行时绑定，并恢复 Super+鼠标移动/缩放绑定，不 reload；
+- Overview 打开时暂时拆掉 Super+鼠标移动/缩放，避免拖预览时被底层 Hyprland 抢走。
 
 ## NixOS 缩略图兼容
 

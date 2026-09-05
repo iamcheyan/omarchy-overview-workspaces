@@ -78,6 +78,7 @@ BarWidget {
         width: implicitWidth
         height: parent.height
         bar: root.bar
+        fontFamily: "JetBrainsMono Nerd Font"
         text: "󰒓"
         tooltipText: "Overview workspace order"
         onPressed: function(buttonCode) {
@@ -104,6 +105,7 @@ BarWidget {
                     && Local.HyprlandData.workspaceHasVisibleWindows(modelData)
 
                 bar: root.bar
+                fontFamily: "JetBrainsMono Nerd Font"
                 // Original mode uses visual slots, while System mode mirrors
                 // the native bar's actual workspace numbers.
                 text: focused

@@ -15,10 +15,6 @@ Text {
         case "terminal": return "\uF120";            // fa-terminal
         case "search": return "\uF002";              // fa-search
         case "menu": return "\uF0C9";                // fa-bars
-        case "logout": return "\uF08B";              // fa-sign-out
-        case "restart_alt":
-        case "refresh": return "\uF021";             // fa-refresh
-        case "power_settings_new": return "\uF011";  // fa-power-off
         default: return "\uF00A";                     // fa-th-large
         }
     }
@@ -28,10 +24,10 @@ Text {
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
     font {
-        // Follow Omarchy's configured font alias. The default Omarchy font
-        // includes the Nerd Font glyphs, while custom font themes can still
-        // provide their own compatible icon font through the same setting.
-        family: Style.fontFamily
+        // Style.fontFamily is not guaranteed to contain private-use Nerd Font
+        // glyphs. Keep the icon font explicit; changing this to the text theme
+        // font makes every fallback icon render as an empty box.
+        family: "JetBrainsMono Nerd Font"
         pixelSize: root.iconSize
     }
 }

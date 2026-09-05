@@ -10,6 +10,5 @@ QtObject {
             property bool orderRightLeft: false
         }
         readonly property QtObject background: QtObject { property string wallpaperPath: ""; property string thumbnailPath: "" }
-        readonly property QtObject hacks: QtObject { property int arbitraryRaceConditionDelay: 50 }
     }
 }

@@ -13,7 +13,6 @@ import "WheelUtils.js" as WheelUtils
 Item {
     id: root
     required property var screen
-    property string searchQuery: ""
     property real wheelAccum: 0
     readonly property string configuredWallpaperPath: FileUtils.expandHomePath(Config.options.background.wallpaperPath)
     // The overview process's keepalive window owns the preloader. readyUrl
@@ -37,7 +36,7 @@ Item {
         void _rev;
         if (OverviewSwitchingController.grabbed)
             return WorkspaceNavigation.switchingModeModel() ?? [];
-        return root.filteredOverviewEntries(root.scopedOverviewEntries());
+        return root.scopedOverviewEntries();
     }
 
     // In per-monitor mode each overlay asks for its own screen's entries instead
@@ -51,28 +50,12 @@ Item {
         const name = root.monitor?.name ?? "";
         if (name.length === 0)
             return all;
-        const own = ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(name, true, {}, false) ?? [];
+        const own = ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(name, true, {}, false, true) ?? [];
         // If Hyprland has not reported this monitor yet, showing everything beats
         // leaving the screen blank.
         return own.length > 0 ? own : all;
     }
     readonly property var overviewEntryIds: (root.overviewEntries ?? []).map(entry => entry.id)
-    readonly property var searchMatchWorkspaceIds: {
-        const query = root.normalizedSearchQuery();
-        const matches = ({});
-        if (query.length === 0)
-            return matches;
-
-        const windows = ServiceManager.workspace.windowList || [];
-        for (let i = 0; i < windows.length; ++i) {
-            const win = windows[i];
-            if (!win || !win.mapped || win.hidden || !win.workspace?.id)
-                continue;
-            if (root.windowMatchesSearch(win, query))
-                matches[win.workspace.id] = true;
-        }
-        return matches;
-    }
     readonly property var monitorGroups: {
         const groups = [];
         const byKey = {};
@@ -201,50 +184,6 @@ Item {
         if (pendingId > 0)
             return pendingId;
         return win?.workspace?.id ?? -1;
-    }
-
-    function normalizedSearchQuery() {
-        return String(root.searchQuery || "").toLowerCase().trim();
-    }
-
-    function windowMatchesSearch(win, query) {
-        if (!win || query.length === 0)
-            return false;
-        const workspace = win.workspace || {};
-        const text = [
-            win.title || "",
-            win.initialTitle || "",
-            win.class || "",
-            win.initialClass || "",
-            workspace.name || "",
-            workspace.id || "",
-            win.monitor || ""
-        ].join(" ").toLowerCase();
-        return text.indexOf(query) >= 0;
-    }
-
-    function entryMatchesSearch(entry, query) {
-        if (!entry || query.length === 0)
-            return true;
-        const entryText = [
-            entry.id || "",
-            entry.name || "",
-            entry.monitorName || "",
-            entry.monitorLabel || "",
-            entry.existingWorkspace ? "workspace" : "",
-            entry.isTrailingEmpty ? "new workspace" : ""
-        ].join(" ").toLowerCase();
-        if (entryText.indexOf(query) >= 0)
-            return true;
-
-        return root.searchMatchWorkspaceIds[entry.id] === true;
-    }
-
-    function filteredOverviewEntries(entries) {
-        const query = root.normalizedSearchQuery();
-        if (query.length === 0)
-            return entries;
-        return (entries || []).filter(entry => root.entryMatchesSearch(entry, query));
     }
 
     function groupedRowsForColumns(columns) {
@@ -954,7 +893,6 @@ Item {
                             window.Drag.source = window
                             window.Drag.hotSpot.x = mouse.x
                             window.Drag.hotSpot.y = mouse.y
-                            // console.log(`[OverviewWindow] Dragging window ${windowData?.address} from position (${window.x}, ${window.y})`)
                         }
                         onReleased: {
                             const targetWorkspace = GlobalStates.overviewDraggingTargetWorkspace
@@ -1017,41 +955,6 @@ Item {
                     bottomRightRadius: root.largeWorkspaceRadius
                     border.width: isFocusedEntry ? 3 : 2
                     border.color: isFocusedEntry ? root.activeBorderColor : TuiStyle.inactiveBorder
-
-                    // Workspace identity is represented by its position and
-                    // the system workspace number in the card itself. Do not
-                    // add a second, plugin-specific Slot badge here.
-                    Rectangle {
-                        visible: false
-                        anchors {
-                            top: parent.top
-                            right: parent.right
-                            topMargin: 10
-                            rightMargin: 10
-                        }
-                        width: slotLabel.implicitWidth + 20
-                        height: 34
-                        radius: 0
-                        color: TuiStyle.bg
-                        border.width: 1
-                        border.color: workspaceBorder.isFocusedEntry
-                            ? TuiStyle.controlActiveBorder
-                            : TuiStyle.inactiveBorder
-
-                        StyledText {
-                            id: slotLabel
-                            anchors.centerIn: parent
-                            readonly property int globalSlot: workspaceBorder.modelData.id
-                            text: globalSlot > 0
-                                ? `Slot ${globalSlot}`
-                                : ""
-                            color: workspaceBorder.isFocusedEntry
-                                ? TuiStyle.accent
-                                : Appearance.colors.colOnLayer1
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            font.weight: Font.DemiBold
-                        }
-                    }
                 }
             }
         }
@@ -1158,27 +1061,6 @@ Item {
                         elide: Text.ElideRight
                         maximumLineCount: 1
                     }
-                }
-            }
-        }
-    }
-
-    // ── Overview provider extension point ──
-    Repeater {
-        id: overviewProvidersRepeater
-        model: ModuleLoader.overviewProviders
-        delegate: Loader {
-            required property var modelData
-            source: modelData.component ?? ""
-            active: true
-            z: {
-                // Default z-order; individual providers can override via their component
-                if (modelData.z !== undefined) return modelData.z;
-                return root.windowDraggingZ + 2;
-            }
-            Component.onCompleted: {
-                if (!modelData.component || modelData.component.length === 0) {
-                    console.warn("[Overview] overviewProvider missing component:", JSON.stringify(modelData));
                 }
             }
         }
