@@ -12,6 +12,99 @@
 
 上一轮移植留下的问题是「症状修了、生命周期没做完」：NixOS 卡死修好了，Hyprland 绑定所有权和系统原生排序模型是半截的。文档仍在描述已经不存在或从未实现的行为。
 
+## 2026-09-05 快捷键失效与顶栏消失事故复盘
+
+这次最后确认的故障链如下，后续 review 不得再把它简化成“某个快捷键写错了”。
+
+### 1. 插件错误地参与了原生快捷键匹配
+
+`KeybindingService.qml` 为了取消 Super 单键释放动作，曾经为一大批键安装：
+
+```text
+SUPER + <key>
+SUPER + CTRL + <key>
+```
+
+其中包括 `SPACE` 和 `RETURN`。早期版本还带有 `ignore_mods = true`，会把带
+Alt/Shift/Ctrl 的原生快捷键也纳入匹配范围。即使移除 `ignore_mods`，这些
+运行时绑定仍然没有必要拥有 Space/Return，并可能与 Omarchy 原生绑定竞争。
+
+Omarchy 的真实原生绑定来自 `$OMARCHY_PATH/default/hypr/bindings/`，包括：
+
+```text
+SUPER + SPACE              Omarchy menu
+SUPER + ALT + SPACE        Apps menu
+SUPER + RETURN             Terminal
+SUPER + SHIFT + RETURN     Browser
+SUPER + ALT + RETURN       Tmux
+```
+
+因此插件只应该拥有自己的 Overview、Win+Tab 和工作区槽位绑定，不能为了
+Super 状态而声明 `SUPER + SPACE` 或 `SUPER + RETURN`。当前实现已经把这两个
+键从 `interruptKeys` 移除。
+
+### 2. 诊断时使用 `unbind` 进一步删除了原生绑定
+
+Hyprland 的：
+
+```text
+hl.unbind("SUPER + SPACE")
+hl.unbind("SUPER + RETURN")
+```
+
+按快捷键表达式删除，不知道某条绑定是插件添加的还是 Omarchy 原生添加的。
+所以这类命令会同时删除同一组合的原生绑定。随后用临时 `hl.bind` 恢复并不等价
+于从 Lua 配置重新生成，导致运行态继续不完整。
+
+以后禁止用裸 `hl.unbind` 作为验证手段，除非目标确实是插件唯一拥有的绑定。
+如果运行态已经被破坏，应该从配置源执行一次受控的 Hyprland reload，并重新
+核对完整绑定表。
+
+### 3. Hyprland reload 后插件绑定没有及时重装
+
+Hyprland reload 会清理运行时绑定。旧的 `KeybindingService` 只在首次加载时
+安装插件绑定；reload 事件之后如果仍保留旧的 `appliedMode`，就会出现：
+
+- Omarchy 原生绑定已经恢复；
+- Overview 的 `SUPER_L`、Win+Tab、工作区槽位绑定已经消失；
+- 服务认为自己已经安装过绑定，因此不再安装。
+
+当前实现会在 `configreloaded` 后把 `appliedMode` 清空，并延迟 250ms 调用
+`applyBindings()`，等待 Hyprland 完成 reload 后再安装插件自己的绑定。
+
+### 4. 顶栏消失不是快捷键配置缺失，而是 Quickshell 进程暂时不存在
+
+现场检查得到的事实是：
+
+- `ps` 中没有运行中的 `quickshell` / `omarchy-shell`；
+- `hyprctl layers` 中没有 `namespace: omarchy-bar`；
+- 日志显示旧 shell `Exiting due to IPC request`，随后新 shell 正在启动；
+- 没有发现 Overview QML fatal error 或 Hyprland config error；
+- 新 shell 启动后 `omarchy-bar`、原生快捷键和插件快捷键一起恢复。
+
+所以“整个顶栏没了”的直接原因是 shell 重启窗口，而不是顶栏组件被代码
+隐藏。插件热重载和手动 shell/reload 操作重叠时会放大这个窗口；日志里还出现
+过 `An instance of this configuration is already running`，说明重启存在竞争。
+
+### 5. 防止再次误判的验证顺序
+
+遇到快捷键或顶栏问题，必须按以下顺序取证：
+
+1. `ps` 确认 Quickshell 是否存在；
+2. `hyprctl layers` 确认 `omarchy-bar` 是否存在；
+3. `hyprctl binds -j` 保存原生和插件绑定快照；
+4. 对照 `$OMARCHY_PATH/default/hypr/bindings/` 与用户 `bindings.lua`；
+5. 检查 Quickshell 日志中的启动、退出和 QML 错误；
+6. 只有确认 shell 存活且绑定存在后，才继续分析输入设备或键盘布局。
+
+任何修复都必须满足：
+
+- 插件安装、卸载和 reload 不改变插件未拥有的快捷键；
+- 不用 `hyprctl reload` 作为普通插件生命周期动作；
+- 不用无法区分所有者的裸 `unbind` 做诊断；
+- reload 后原生绑定和插件绑定都能从各自的来源恢复；
+- 修改后检查 `hyprctl configerrors`、插件日志和干净工作区。
+
 ## 问题
 
 ### Bug 1 — 系统原生模式下 Win+1…0 被拆掉且永不恢复
