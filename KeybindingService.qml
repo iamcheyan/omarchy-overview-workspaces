@@ -21,9 +21,9 @@ Item {
         onTriggered: root.applyBindings()
     }
 
-    // These bindings only notify the shell that Super is being used with
-    // another key. They are deliberately non-consuming, so the native
-    // application binding (Win+Space, Win+Enter, etc.) still runs.
+    // The only key expressions installed below belong to this plugin. Never
+    // add a generic SUPER+key observer: it cannot distinguish a standalone
+    // Super release from a user shortcut such as Ctrl+Super+V.
     function configuredMode() {
         const config = root.shell?.shellConfig;
         const bar = config?.bar;
@@ -62,6 +62,8 @@ Item {
     function bindingScript(optimized) {
         const commands = [
             'hl.layer_rule({ name = "overview-instant", match = { namespace = "^quickshell:overview$" }, no_anim = true, animation = "none" })',
+            // These are the plugin's own expressions. Do not add unrelated
+            // user shortcuts here; unbind has no owner information.
             'hl.unbind("SUPER_L")',
             'hl.unbind("SUPER_R")',
             'hl.unbind("SUPER + SUPER_L")',
@@ -69,6 +71,9 @@ Item {
             'hl.unbind("SUPER + TAB")',
             'hl.unbind("SUPER + SHIFT + TAB")'
         ];
+        commands.push('if _G.hancoreOverviewSuperListener then _G.hancoreOverviewSuperListener:remove() end');
+        commands.push('_G.hancoreOverviewSuperDown = _G.hancoreOverviewSuperDown or {}');
+        commands.push('_G.hancoreOverviewSuperListener = hl.on("input.keyboard.key", function(code, time, state) local isSuper = code == 133 or code == 134; if state == 1 then if isSuper then _G.hancoreOverviewSuperDown[code] = true; local other = false; for k,v in pairs(_G.hancoreOverviewSuperDown) do if k ~= code and v then other = true end end; hl.dispatch(hl.dsp.event("hancore-overview-super," .. (other and "interrupt" or "down"))) else local any = false; for k,v in pairs(_G.hancoreOverviewSuperDown) do if v then any = true end end; if any then hl.dispatch(hl.dsp.event("hancore-overview-super,interrupt")) end end else if isSuper and _G.hancoreOverviewSuperDown[code] then _G.hancoreOverviewSuperDown[code] = nil; local any = false; for k,v in pairs(_G.hancoreOverviewSuperDown) do if v then any = true end end; hl.dispatch(hl.dsp.event("hancore-overview-super," .. (any and "up" or "tap"))) end end end)');
         commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, description = "Overview Super state" })');
         commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, description = "Overview Super state" })');
         commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, release = true, description = "Overview Super state" })');

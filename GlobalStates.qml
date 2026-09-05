@@ -147,43 +147,35 @@ Singleton {
             GlobalStates.barPopupEphemeral = false;
     }
 
-    GlobalShortcut {
-        name: "workspaceNumber"
-        description: "Hold to show workspace numbers, release to show icons"
-
-        onPressed: {
-            root.superDown = true
-            root.superReleaseMightTrigger = true
-        }
-        onReleased: {
-            root.superDown = false
-            if (root.overviewWarmStart) {
-                root.superReleaseMightTrigger = false
-                return
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event?.name !== "custom")
+                return;
+            const data = event.data ?? "";
+            if (data === "hancore-overview-super,down") {
+                root.superDown = true;
+                root.superReleaseMightTrigger = true;
+            } else if (data === "hancore-overview-super,interrupt") {
+                root.superReleaseMightTrigger = false;
+            } else if (data === "hancore-overview-super,tap" || data === "hancore-overview-super,up") {
+                const grabbed = root.overviewSwitchingController?.grabbed ?? false;
+                root.superDown = false;
+                if (grabbed) {
+                    root.superReleaseMightTrigger = false;
+                    root.overviewSwitchingController.commitGrabbedMode();
+                } else if (data.endsWith(",tap") && root.superReleaseMightTrigger && !root.overviewWarmStart) {
+                    root.superReleaseMightTrigger = false;
+                    if (!GlobalStates.overviewOpen)
+                        GlobalStates.overviewOpen = true;
+                    else if (GlobalStates.overviewSearchMode)
+                        GlobalStates.overviewSearchMode = false;
+                    else
+                        GlobalStates.overviewOpen = false;
+                } else {
+                    root.superReleaseMightTrigger = false;
+                }
             }
-            if (root.overviewSwitchingController && root.overviewSwitchingController.grabbed) {
-                root.superReleaseMightTrigger = false
-                root.overviewSwitchingController.commitGrabbedMode()
-                return
-            }
-            if (root.superReleaseMightTrigger) {
-                root.superReleaseMightTrigger = false
-                if (!GlobalStates.overviewOpen)
-                    GlobalStates.overviewOpen = true
-                else if (GlobalStates.overviewSearchMode)
-                    GlobalStates.overviewSearchMode = false
-                else if (!(root.overviewSwitchingController && root.overviewSwitchingController.grabbed))
-                    GlobalStates.overviewOpen = false
-            }
-        }
-    }
-
-    GlobalShortcut {
-        name: "superInterrupt"
-        description: "Interrupt Super-alone overview toggle"
-
-        onPressed: {
-            root.superReleaseMightTrigger = false
         }
     }
 }
