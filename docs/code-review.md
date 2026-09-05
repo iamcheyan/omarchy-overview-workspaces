@@ -40,8 +40,10 @@ SUPER + ALT + RETURN       Tmux
 ```
 
 因此插件只应该拥有自己的 Overview、Win+Tab 和工作区槽位绑定，不能为了
-Super 状态而声明 `SUPER + SPACE` 或 `SUPER + RETURN`。当前实现已经把这两个
-键从 `interruptKeys` 移除。
+Super 状态而声明 `SUPER + SPACE` 或 `SUPER + RETURN`。当前实现已经删除整个
+`interruptKeys` 通用观察层，而不只是把这两个键移除。插件不再声明任意
+`SUPER + <key>` 或 `SUPER + CTRL + <key>` 绑定；Super 状态绑定本身使用
+`non_consuming`，不会吞掉后续组合键。
 
 ### 2. 诊断时使用 `unbind` 进一步删除了原生绑定
 
@@ -71,6 +73,10 @@ Hyprland reload 会清理运行时绑定。旧的 `KeybindingService` 只在首�
 
 当前实现会在 `configreloaded` 后把 `appliedMode` 清空，并延迟 250ms 调用
 `applyBindings()`，等待 Hyprland 完成 reload 后再安装插件自己的绑定。
+
+2026-09-05 的最终运行态复核确认：旧版本遗留的通用 interrupt 绑定必须通过一次
+“清理旧运行态 + 配置 reload + 重启 shell”才能彻底消失。仅更新 QML 文件不会
+自动删除已经写入 Hyprland 的运行时绑定。
 
 ### 4. 顶栏消失不是快捷键配置缺失，而是 Quickshell 进程暂时不存在
 
