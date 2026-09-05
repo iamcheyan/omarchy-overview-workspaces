@@ -15,7 +15,10 @@ Item {
     // another key. They are deliberately non-consuming, so the native
     // application binding (Win+Space, Win+Enter, etc.) still runs.
     readonly property var interruptKeys: [
-        "RETURN", "TAB", "SPACE", "BACKSPACE", "ESCAPE",
+        // Space and Return are intentionally excluded. They are common native
+        // launcher/terminal/browser shortcuts in Omarchy; the plugin must not
+        // compete for them just to cancel the Super-alone release path.
+        "TAB", "BACKSPACE", "ESCAPE",
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
         "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
