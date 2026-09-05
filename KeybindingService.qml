@@ -24,19 +24,6 @@ Item {
     // These bindings only notify the shell that Super is being used with
     // another key. They are deliberately non-consuming, so the native
     // application binding (Win+Space, Win+Enter, etc.) still runs.
-    readonly property var interruptKeys: [
-        // Space and Return are intentionally excluded. They are common native
-        // launcher/terminal/browser shortcuts in Omarchy; the plugin must not
-        // compete for them just to cancel the Super-alone release path.
-        "TAB", "BACKSPACE", "ESCAPE",
-        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-        "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
-        "LEFT", "RIGHT", "UP", "DOWN", "GRAVE", "MINUS", "EQUAL",
-        "COMMA", "PERIOD", "SLASH", "F1", "F2", "F3", "F4", "F5", "F6",
-        "F7", "F8", "F9", "F10", "F11", "F12"
-    ]
-
     function configuredMode() {
         const config = root.shell?.shellConfig;
         const bar = config?.bar;
@@ -50,10 +37,10 @@ Item {
         return "";
     }
 
-    // Workspace number keys are the only normal bindings this plugin owns.
-    // The interrupt bindings below are non-consuming observers: they preserve
-    // the native SUPER+letter/SPACE/RETURN action while cancelling the
-    // Super-alone Overview release action.
+    // Workspace numbers and the overview navigation chords are the only normal
+    // bindings this plugin owns. Do not install generic SUPER+key observers:
+    // Hyprland cannot associate an unbind with its original owner, so those
+    // observers can interfere with user-defined shortcuts.
     function workspaceNumberCommands(optimized) {
         const commands = [];
         for (let slot = 1; slot <= 10; ++slot) {
@@ -82,22 +69,14 @@ Item {
             'hl.unbind("SUPER + TAB")',
             'hl.unbind("SUPER + SHIFT + TAB")'
         ];
-        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, description = "Overview Super state" })');
-        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, description = "Overview Super state" })');
-        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, release = true, description = "Overview Super state" })');
-        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { transparent = true, release = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, release = true, description = "Overview Super state" })');
+        commands.push('hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), { non_consuming = true, transparent = true, release = true, description = "Overview Super state" })');
         commands.push('hl.bind("SUPER + TAB", hl.dsp.global("quickshell:overviewNext"), { description = "Overview workspace next" })');
         commands.push('hl.bind("SUPER + SHIFT + TAB", hl.dsp.global("quickshell:overviewPrev"), { description = "Overview workspace previous" })');
         commands.push('hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
         commands.push('hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
-        for (const key of root.interruptKeys) {
-            commands.push(`hl.bind("SUPER + CTRL + ${key}", hl.dsp.global("quickshell:superInterrupt"), { non_consuming = true, transparent = true, description = "Overview Ctrl+Super interrupt" })`);
-            // Keep this exact-modifier only. `ignore_mods` also matches native
-            // SUPER+ALT/SHIFT/CTRL shortcuts (for example Omarchy's app and
-            // terminal launchers), so the overview would consume shortcuts it
-            // does not own.
-            commands.push(`hl.bind("SUPER + ${key}", hl.dsp.global("quickshell:superInterrupt"), { non_consuming = true, transparent = true, description = "Overview Super interrupt" })`);
-        }
         // Native mode does not own Win+number. Never unbind or recreate those
         // keys there; they may be user-defined rather than Omarchy defaults.
         return optimized
@@ -142,10 +121,6 @@ Item {
             'hl.unbind("SUPER + TAB")',
             'hl.unbind("SUPER + SHIFT + TAB")'
         ];
-        for (const key of root.interruptKeys) {
-            commands.push(`hl.unbind("SUPER + CTRL + ${key}")`);
-            commands.push(`hl.unbind("SUPER + ${key}")`);
-        }
         if (root.appliedMode === "legacy")
             for (const command of root.nativeWorkspaceNumberCommands())
                 commands.push(command);
