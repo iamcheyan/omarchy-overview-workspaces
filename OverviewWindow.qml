@@ -17,7 +17,6 @@ Item { // Window
     property var scale
     property real scaleX: scale * widthRatio
     property real scaleY: scale * heightRatio
-    property bool restrictToWorkspace: true
     property real widthRatio: {
         if (!widgetMonitor || !monitorData) return 1;
         const widgetWidth = widgetMonitor.transform & 1 ? widgetMonitor.height : widgetMonitor.width;
@@ -105,10 +104,12 @@ Item { // Window
     property real iconToWindowRatio: centerIcons ? 0.35 : 0.15
     property real xwaylandIndicatorToIconRatio: 0.35
     property real iconToWindowRatioCompact: 0.6
-    property string iconPath: AppSearch.iconSource(AppSearch.guessIcon(windowData?.class))
+    // Hyprland can temporarily omit `class` while a client is being moved.
+    // initialClass is stable for the lifetime of the window and was the value
+    // available in the old overview during those refreshes.
+    property string iconClass: windowData?.class || windowData?.initialClass || "application-x-executable"
+    property string iconPath: AppSearch.iconSource(AppSearch.guessIcon(root.iconClass))
     property bool compactMode: Appearance.font.pixelSize.smaller * 4 > targetWindowHeight || Appearance.font.pixelSize.smaller * 4 > targetWindowWidth
-
-    property bool indicateXWayland: windowData?.xwayland ?? false
 
     property bool holdPosition: false
     property real holdX: 0
@@ -118,7 +119,14 @@ Item { // Window
     y: holdPosition ? holdY : (yOffset + localY)
     width: targetWindowWidth
     height: targetWindowHeight
-    opacity: 1
+    // ScreencopyView delivers the first frame asynchronously. Fade a window
+    // in when that frame arrives instead of making every workspace card flash
+    // independently during Overview startup.
+    opacity: root.anyPreviewContent || root.showingFreeze || root.captureAttempt >= 8 ? 1 : 0
+
+    Behavior on opacity {
+        NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+    }
 
     function holdCurrentPosition() {
         holdX = x;
@@ -139,7 +147,6 @@ Item { // Window
     property real topRightRadius: 0
     property real bottomLeftRadius: 0
     property real bottomRightRadius: 0
-    readonly property bool perfMode: (Persistent.states?.display?.optimization ?? "balanced") === "performance"
     clip: true
 
     property bool everHadContent: false
@@ -149,8 +156,6 @@ Item { // Window
     property bool slot0Armed: false
     property bool slot1Armed: false
     property url freezeUrl: ""
-    property var freezeResult: null
-    property bool snapshotPending: false
     property var captureToplevel: null
     readonly property bool anyPreviewContent: preview0.hasContent || preview1.hasContent
     readonly property bool showingFreeze: !root.anyPreviewContent && root.freezeUrl != ""
@@ -192,22 +197,15 @@ Item { // Window
     }
 
     function snapshotPreview() {
-        // Keep the ItemGrabResult alive: its URL is an in-memory Qt image key,
-        // not a file path. Take backups on first content and drag/move only.
-        if (!root.captureActive || !root.visible || !root.anyPreviewContent
-            || !previewHost.window || root.snapshotPending)
+        // Keep the original grab-to-image behavior. Quickshell may return a
+        // non-file image URL, which Image can use while ScreencopyView is
+        // being replaced during a drag.
+        if (!root.anyPreviewContent)
             return;
-        root.snapshotPending = true;
-        const accepted = previewHost.grabToImage(result => {
-            root.snapshotPending = false;
-            const url = String(result?.url ?? "");
-            if (root.captureActive && root.visible && url.length > 0) {
-                root.freezeResult = result;
-                root.freezeUrl = url;
-            }
+        previewHost.grabToImage(result => {
+            if (result?.url)
+                root.freezeUrl = result.url;
         });
-        if (!accepted)
-            root.snapshotPending = false;
     }
 
     onToplevelChanged: root.rememberToplevel()
@@ -232,9 +230,18 @@ Item { // Window
             root.slot1Armed = false;
             root.captureAttempt = 0;
             root.freezeUrl = "";
-            root.freezeResult = null;
             root.everHadContent = false;
         }
+    }
+
+    // Keep a recent file-backed frame available while the live capture is
+    // replaced. A move can stop both ScreencopyView slots for a short period.
+    Timer {
+        id: freezeTimer
+        interval: 400
+        repeat: true
+        running: root.captureActive && root.anyPreviewContent
+        onTriggered: root.snapshotPreview()
     }
 
     Timer {
@@ -302,7 +309,7 @@ Item { // Window
         id: freezeImage
         anchors.fill: parent
         visible: root.showingFreeze
-        source: root.showingFreeze ? root.freezeUrl : ""
+        source: root.freezeUrl
         fillMode: Image.Stretch
         asynchronous: false
         cache: false
@@ -322,6 +329,7 @@ Item { // Window
 
     Image {
         id: windowIcon
+        z: 3
         visible: root.iconPath !== "" && status !== Image.Error
         asynchronous: false
         property real baseSize: Math.min(root.targetWindowWidth, root.targetWindowHeight)
@@ -342,7 +350,8 @@ Item { // Window
     }
 
     Rectangle {
-        visible: root.iconPath === "" || windowIcon.status === Image.Error
+        z: 3
+        visible: (root.iconPath === "" || windowIcon.status === Image.Error)
         anchors {
             top: root.centerIcons ? undefined : parent.top
             left: root.centerIcons ? undefined : parent.left

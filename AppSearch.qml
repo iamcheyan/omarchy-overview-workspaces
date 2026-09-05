@@ -4,11 +4,8 @@ import Quickshell
 import Quickshell.Io
 
 // Application lookup for the overview's search mode.
-//
-// This used to be a stub returning [], which meant the "Applications" section
-// could never appear. It now queries DesktopEntries, the same source Omarchy's
-// own services/AppLibrary.qml uses, and applies the same launcher.hides filter,
-// so results agree with the Super+Space menu.
+// Queries DesktopEntries and applies Omarchy's launcher.hides filter so
+// results agree with the Super+Space menu.
 Singleton {
     id: root
 
@@ -18,6 +15,8 @@ Singleton {
     // that ship without it (btop, cmake-gui, avahi-discover and 35 others), so
     // filtering on NoDisplay only would surface entries its own launcher hides.
     property var hiddenIds: ({})
+    property var iconIndex: ({})
+    property var pendingIconIndex: ({})
 
     function normalizeDesktopId(value) {
         return String(value || "").trim().replace(/\.desktop$/, "");
@@ -52,9 +51,54 @@ Singleton {
     }
 
     function iconSource(iconName, fallback) {
-        const path = Quickshell.iconPath(iconName || fallback || "application-x-executable", true)
-        return path ? (path.startsWith("/") ? `file://${path}` : path) : ""
+        const name = String(iconName || fallback || "application-x-executable").trim();
+        if (name.length === 0)
+            return "";
+        if (name.startsWith("file://") || name.startsWith("image://"))
+            return name;
+        if (name.startsWith("/"))
+            return `file://${name}`;
+        const indexed = root.iconIndex[name];
+        if (indexed)
+            return `file://${indexed}`;
+        const path = Quickshell.iconPath(name, true);
+        return path ? (path.startsWith("/") ? `file://${path}` : path) : "";
     }
+
+    function iconIndexScanCommand() {
+        return [
+            'dirs="$HOME/.icons $HOME/.local/share/icons";',
+            'IFS=":"; for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do dirs="$dirs $d/icons"; done; unset IFS;',
+            'for ext in svg png; do',
+            '  for base in $dirs; do',
+            '    [[ -d $base ]] && find "$base" \\( -path "*/apps/*" -o -path "*/devices/*" \\) -name "*.$ext" 2>/dev/null;',
+            '  done;',
+            '  find /usr/share/pixmaps -maxdepth 1 -name "*.$ext" 2>/dev/null;',
+            'done'
+        ].join(" ");
+    }
+
+    function indexIconLine(path) {
+        const value = String(path || "").trim();
+        const slash = value.lastIndexOf("/");
+        const file = slash >= 0 ? value.slice(slash + 1) : value;
+        const dot = file.lastIndexOf(".");
+        const name = dot > 0 ? file.slice(0, dot) : file;
+        if (name.length > 0 && root.pendingIconIndex[name] === undefined)
+            root.pendingIconIndex[name] = value;
+    }
+
+    Process {
+        id: iconIndexScan
+        command: ["bash", "-c", root.iconIndexScanCommand()]
+        stdout: SplitParser {
+            onRead: function(line) { root.indexIconLine(line); }
+        }
+        onStarted: root.pendingIconIndex = ({})
+        onExited: root.iconIndex = root.pendingIconIndex
+    }
+
+    Component.onCompleted: iconIndexScan.running = true
 
     function guessIcon(name) { return name || "application-x-executable" }
 

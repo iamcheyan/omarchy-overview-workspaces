@@ -77,7 +77,7 @@ Singleton {
     }
 
     function hyprlandClientsForWorkspace(workspace) {
-        return root.windowList.filter(win => win.workspace.id === workspace);
+        return root.windowList.filter(win => win?.workspace?.id === workspace);
     }
 
     function workspaceHasVisibleWindows(workspaceId) {
@@ -86,11 +86,6 @@ Singleton {
         return root.hyprlandClientsForWorkspace(workspaceId).some(
             win => win.mapped && !win.hidden
         );
-    }
-
-    function workspaceGroupBase(workspaceId, groupSize) {
-        const size = groupSize > 0 ? groupSize : 10;
-        return Math.floor((Math.max(workspaceId, 1) - 1) / size) * size;
     }
 
     function isRegularWorkspace(ws) {
@@ -217,38 +212,46 @@ Singleton {
         return ids;
     }
 
-    function overviewWorkspaceEntriesForMonitor(monitorName, appendTrailing, reservedWorkspaceIds, orderByMru) {
+    function overviewWorkspaceEntriesForMonitor(monitorName, appendTrailing, reservedWorkspaceIds, orderByMru, includeEmptySystemSlots) {
         const useMruOrder = orderByMru ?? false;
         const targetMonitor = monitorName ?? "";
+        const showEmptySystemSlots = includeEmptySystemSlots ?? (targetMonitor.length === 0);
+        const reserved = reservedWorkspaceIds ?? {};
+        const shouldAppendTrailing = appendTrailing !== false;
         const useSystemOrder = GlobalStates.overviewSortMode !== "legacy";
         const monitorData = targetMonitor
             ? root.monitors.find(mon => (mon.name ?? "") === targetMonitor)
             : null;
-        const activeId = Math.max(1, Math.min(100,
-            monitorData?.activeWorkspace?.id
-                ?? root.activeWorkspace?.id
-                ?? 1
-        ));
 
-        // Only workspaces with visible windows participate in the grid.
-        // Hyprland may keep real empty workspaces around after cross-monitor
-        // moves; those are handled as the single trailing slot below.
-        const regularWorkspaces = useSystemOrder
-            ? root.systemWorkspaceIds().map(id => {
+        // Optimized order only shows occupied workspaces. System-native order
+        // keeps Omarchy's 1–10 strip, but live workspaces still belong to one
+        // monitor — do not copy another screen's windows into this overlay.
+        let regularWorkspaces;
+        if (useSystemOrder) {
+            regularWorkspaces = [];
+            for (const id of root.systemWorkspaceIds()) {
                 const live = root.workspaceById[id];
-                return live ?? {
-                    id,
-                    name: String(id),
-                    monitor: targetMonitor || root.monitors[0]?.name || ""
-                };
-            })
-            : root.workspaces
+                if (live) {
+                    if (targetMonitor && root.workspaceMonitorName(live) !== targetMonitor)
+                        continue;
+                    regularWorkspaces.push(live);
+                } else if (showEmptySystemSlots) {
+                    regularWorkspaces.push({
+                        id,
+                        name: String(id),
+                        monitor: targetMonitor || root.monitors[0]?.name || ""
+                    });
+                }
+            }
+        } else {
+            regularWorkspaces = root.workspaces
                 .filter(ws => root.isRegularWorkspace(ws))
                 .filter(ws => ws.id >= 1 && ws.id <= 100)
                 .filter(ws => !targetMonitor || root.workspaceMonitorName(ws) === targetMonitor)
                 .filter(ws => !root.suppressedEmptyWorkspaceIds().includes(ws.id))
                 .filter(ws => root.workspaceHasVisibleWindows(ws.id))
                 .sort((a, b) => a.id - b.id);
+        }
 
         const seen = {};
         const withWindows = [];
@@ -343,51 +346,59 @@ Singleton {
 
         const ordered = orderedWindows.slice();
 
-        // Keep one creation target at the very end, as in the original
-        // Overview. It must not reuse 1..5, because those empty workspaces
-        // are intentionally shown to match Omarchy's bar.
-        const usedIds = useSystemOrder ? root.systemWorkspaceIds() : [];
-        for (const workspace of root.workspaces) {
-            const id = Number(workspace?.id ?? -1);
-            if (id > 0 && id <= 100 && !usedIds.includes(id))
-                usedIds.push(id);
-        }
-        const pendingIds = Object.keys(GlobalStates.overviewPendingWorkspaceMonitorById ?? {})
-            .map(id => Number(id));
-        const usedIdSet = ({});
-        for (const id of usedIds)
-            usedIdSet[id] = true;
-        for (const id of pendingIds) {
-            if (id > 0 && id <= 100) {
-                usedIdSet[id] = true;
-                if (!usedIds.includes(id))
+        if (shouldAppendTrailing) {
+            // Keep one creation target at the very end. System-native already
+            // shows empty 1–10, so trailing must not reuse those ids.
+            const usedIds = useSystemOrder ? root.systemWorkspaceIds() : [];
+            for (const workspace of root.workspaces) {
+                const id = Number(workspace?.id ?? -1);
+                if (id > 0 && id <= 100 && !usedIds.includes(id))
                     usedIds.push(id);
             }
-        }
-        let trailingId = useSystemOrder
-            ? root.allocateSystemTrailingWorkspaceId(usedIdSet)
-            : WorkspaceOrder.allocateId(usedIdSet, {});
-        while (useSystemOrder && trailingId <= 100 && usedIds.includes(trailingId))
-            trailingId += 1;
-        if (trailingId <= 100) {
-            ordered.push({
-                id: trailingId,
-                monitorName: targetMonitor || monitorData?.name || root.monitors[0]?.name || "",
-                monitorIndex: 0,
-                monitorLabel: targetMonitor,
-                isTrailingEmpty: true
-            });
+            const pendingIds = Object.keys(GlobalStates.overviewPendingWorkspaceMonitorById ?? {})
+                .map(id => Number(id));
+            const usedIdSet = ({});
+            for (const id of usedIds)
+                usedIdSet[id] = true;
+            for (const id of pendingIds) {
+                if (id > 0 && id <= 100) {
+                    usedIdSet[id] = true;
+                    if (!usedIds.includes(id))
+                        usedIds.push(id);
+                }
+            }
+            for (const key of Object.keys(reserved)) {
+                const id = Number(key);
+                if (id > 0 && id <= 100)
+                    usedIdSet[id] = true;
+            }
+            let trailingId = useSystemOrder
+                ? root.allocateSystemTrailingWorkspaceId(usedIdSet, reserved)
+                : WorkspaceOrder.allocateId(usedIdSet, reserved);
+            while (useSystemOrder && trailingId > 0 && trailingId <= 100
+                    && (usedIds.includes(trailingId) || reserved[trailingId]))
+                trailingId += 1;
+            if (trailingId > 0 && trailingId <= 100) {
+                reserved[trailingId] = true;
+                ordered.push({
+                    id: trailingId,
+                    monitorName: targetMonitor || monitorData?.name || root.monitors[0]?.name || "",
+                    monitorIndex: 0,
+                    monitorLabel: targetMonitor,
+                    isTrailingEmpty: true
+                });
+            }
         }
 
         return ordered;
     }
 
-    // Omarchy's stock bar has room for live ids 6..10. Reuse the first empty
-    // one before creating 11+, while still allowing and displaying any
-    // already-existing workspace above 10.
-    function allocateSystemTrailingWorkspaceId(usedIdSet) {
+    // 1–10 are already on the native strip when shown, so skip occupied and
+    // reserved ids, then allocate 11+.
+    function allocateSystemTrailingWorkspaceId(usedIdSet, reservedIds) {
+        const reserved = reservedIds ?? {};
         for (let id = 6; id <= 10; id++) {
-            if (!usedIdSet[id])
+            if (!usedIdSet[id] && !reserved[id])
                 return id;
         }
 
@@ -397,24 +408,20 @@ Singleton {
             if (id > highest && id <= 100)
                 highest = id;
         }
+        for (const key of Object.keys(reserved)) {
+            const id = Number(key);
+            if (id > highest && id <= 100)
+                highest = id;
+        }
         return highest + 1;
     }
 
     function overviewWorkspaceEntriesGlobal(orderByMru) {
-        return root.overviewWorkspaceEntriesForMonitor("", true, {}, orderByMru ?? false);
+        return root.overviewWorkspaceEntriesForMonitor("", true, {}, orderByMru ?? false, true);
     }
 
     function sortedOverviewMonitors() {
         return root.monitors.slice().sort((a, b) => {
-            // Temporarily disabled while validating cross-monitor drag behavior:
-            // keep monitor group order identical on every screen.
-            // const anchorName = GlobalStates.overviewOpen
-            //     ? (GlobalStates.overviewAnchorMonitorName || Hyprland.focusedMonitor?.name || "")
-            //     : (Hyprland.focusedMonitor?.name ?? "");
-            // const aAnchor = (a.name ?? "") === anchorName;
-            // const bAnchor = (b.name ?? "") === anchorName;
-            // if (aAnchor !== bAnchor)
-            //     return aAnchor ? -1 : 1;
             if ((a.y ?? 0) !== (b.y ?? 0))
                 return (a.y ?? 0) - (b.y ?? 0);
             return (a.x ?? 0) - (b.x ?? 0);
@@ -427,7 +434,7 @@ Singleton {
         const reservedIds = {};
         for (let i = 0; i < monitors.length; ++i) {
             const mon = monitors[i];
-            const entries = root.overviewWorkspaceEntriesForMonitor(mon.name, true, reservedIds);
+            const entries = root.overviewWorkspaceEntriesForMonitor(mon.name, true, reservedIds, false, false);
             for (let j = 0; j < entries.length; ++j) {
                 entries[j].monitorIndex = i;
                 entries[j].monitorLabel = mon.description || mon.name || `Monitor ${i + 1}`;
@@ -537,15 +544,6 @@ Singleton {
         root.dataSerial += 1;
     }
 
-    function biggestWindowForWorkspace(workspaceId) {
-        const windowsInThisWorkspace = HyprlandData.windowList.filter(w => w.workspace.id == workspaceId);
-        return windowsInThisWorkspace.reduce((maxWin, win) => {
-            const maxArea = (maxWin?.size?.[0] ?? 0) * (maxWin?.size?.[1] ?? 0);
-            const winArea = (win?.size?.[0] ?? 0) * (win?.size?.[1] ?? 0);
-            return winArea > maxArea ? win : maxWin;
-        }, null);
-    }
-
     Component.onCompleted: {
         updateAll();
     }
@@ -578,11 +576,27 @@ Singleton {
         stdout: StdioCollector {
             id: clientsCollector
             onStreamFinished: {
-                // labwc: hyprctl has no IPC to talk to and yields empty
-                // stdout; JSON.parse("") would log a SyntaxError per poll.
                 if (!root.hyprlandIpcAvailable || !clientsCollector.text.trim())
                     return;
-                root.windowList = JSON.parse(clientsCollector.text)
+                let parsed;
+                try {
+                    parsed = JSON.parse(clientsCollector.text);
+                } catch (e) {
+                    console.warn("[HyprlandData] Failed to parse hyprctl clients:", e);
+                    return;
+                }
+                // During a cross-workspace move, hyprctl can briefly return an
+                // empty client array while the compositor is reassigning the
+                // surface. Replacing the live list with that transient result
+                // destroys every overview delegate and therefore every
+                // thumbnail/icon. Keep the last complete list until the next
+                // non-empty snapshot (a genuinely empty desktop has no
+                // toplevels either).
+                if (parsed.length === 0 && ToplevelManager.toplevels.values.length > 0) {
+                    console.warn("[HyprlandData] Ignoring transient empty client snapshot");
+                    return;
+                }
+                root.windowList = parsed
                 let tempWinByAddress = {};
                 for (var i = 0; i < root.windowList.length; ++i) {
                     var win = root.windowList[i];
@@ -629,7 +643,12 @@ Singleton {
             onStreamFinished: {
                 if (!root.hyprlandIpcAvailable || !monitorsCollector.text.trim())
                     return;
-                root.monitors = JSON.parse(monitorsCollector.text);
+                try {
+                    root.monitors = JSON.parse(monitorsCollector.text);
+                } catch (e) {
+                    console.warn("[HyprlandData] Failed to parse hyprctl monitors:", e);
+                    return;
+                }
                 root.monitorsLoaded = true;
                 root.syncWorkspaceOrder();
                 root.markDataChanged();
@@ -646,7 +665,13 @@ Singleton {
             onStreamFinished: {
                 if (!root.hyprlandIpcAvailable || !workspacesCollector.text.trim())
                     return;
-                var rawWorkspaces = JSON.parse(workspacesCollector.text);
+                var rawWorkspaces;
+                try {
+                    rawWorkspaces = JSON.parse(workspacesCollector.text);
+                } catch (e) {
+                    console.warn("[HyprlandData] Failed to parse hyprctl workspaces:", e);
+                    return;
+                }
                 // Filter out invalid workspace ids (e.g. lock-screen temp workspace 2147483647 - N)
                 root.workspaces = rawWorkspaces.filter(ws => ws.id >= 1 && ws.id <= 100);
                 let tempWorkspaceById = {};
