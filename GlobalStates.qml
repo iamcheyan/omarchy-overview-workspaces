@@ -38,6 +38,10 @@ Singleton {
     property int overviewDraggingFromWorkspace: -1
     property int overviewDraggingTargetWorkspace: -1
     property bool overviewDraggingTargetIsTrailing: false
+    // The monitor that owns the target workspace, which is not the monitor
+    // drawing the card: with the all-workspaces preview every overlay renders
+    // every workspace. Routing the commit needs the owner.
+    property string overviewDraggingTargetMonitor: ""
     property var overviewSuppressedEmptyWorkspaceIds: []
     property var overviewPendingWorkspaceMonitorById: ({})
     property var overviewPendingOccupiedWorkspaces: []
