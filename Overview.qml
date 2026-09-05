@@ -152,8 +152,33 @@ Scope {
                 GlobalStates.overviewPendingWorkspaceMonitorById = ({});
                 GlobalStates.overviewPendingOccupiedWorkspaces = [];
             }
+            overviewScope.setNativeMouseGuard(GlobalStates.overviewOpen);
         }
     }
+
+    // Overview owns the state in this process. Keep Hyprland's native
+    // Super+mouse operations out of the preview drag surface only while this
+    // UI is active, then restore exactly those two native operations.
+    function setNativeMouseGuard(guarded) {
+        const commands = [
+            'hl.unbind("SUPER + mouse:272")',
+            'hl.unbind("SUPER + mouse:273")'
+        ];
+        if (!guarded) {
+            commands.push('hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Move window" })');
+            commands.push('hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })');
+        }
+        Quickshell.execDetached(["hyprctl", "eval", commands.join("; ")]);
+    }
+
+    Connections {
+        target: OverviewSwitchingController
+        function onGrabbedChanged() {
+            overviewScope.setNativeMouseGuard(GlobalStates.overviewOpen || OverviewSwitchingController.grabbed);
+        }
+    }
+
+    Component.onDestruction: overviewScope.setNativeMouseGuard(false)
 
     // Keep MRU in sync when the user switches workspaces outside of overview
     // (e.g. via Hyprland keybindings). While overview is open the MRU is frozen.
