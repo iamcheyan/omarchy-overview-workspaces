@@ -167,25 +167,28 @@ Singleton {
         GlobalStates.overviewDraggingFromWorkspace = -1;
         GlobalStates.overviewDraggingTargetWorkspace = -1;
         GlobalStates.overviewDraggingTargetIsTrailing = false;
+        GlobalStates.overviewDraggingTargetMonitor = "";
     }
 
     function beginWindowDrag(fromWorkspaceId) {
         GlobalStates.overviewDraggingFromWorkspace = fromWorkspaceId ?? -1;
     }
 
-    function setDragTarget(workspaceId, isTrailing) {
+    function setDragTarget(workspaceId, isTrailing, workspaceMonitorName) {
         GlobalStates.overviewDraggingTargetWorkspace = workspaceId;
         GlobalStates.overviewDraggingTargetIsTrailing = isTrailing;
+        GlobalStates.overviewDraggingTargetMonitor = String(workspaceMonitorName ?? "");
     }
 
     function clearDragTarget(workspaceId) {
         if (GlobalStates.overviewDraggingTargetWorkspace === workspaceId) {
             GlobalStates.overviewDraggingTargetWorkspace = -1;
             GlobalStates.overviewDraggingTargetIsTrailing = false;
+            GlobalStates.overviewDraggingTargetMonitor = "";
         }
     }
 
-    function commitWindowDrag(windowAddress, currentWorkspaceId, targetWorkspace, targetIsTrailing) {
+    function commitWindowDrag(windowAddress, currentWorkspaceId, targetWorkspace, targetIsTrailing, targetMonitorHint) {
         root.resetOverviewDragState();
         if (!windowAddress || targetWorkspace === -1 || targetWorkspace === currentWorkspaceId)
             return false;
@@ -194,9 +197,14 @@ Singleton {
             .filter(win => win.mapped && !win.hidden);
         const sourceIsEmptyAfterMove = sourceVisibleWindows.length <= 1;
 
-        const model = root.overviewModel();
-        const entry = model.find(item => item.id === targetWorkspace);
-        const targetMonitorName = entry?.monitorName ?? "";
+        // A workspace id never identifies a card on its own: each monitor allocates
+        // its trailing "new workspace" id independently, so the same number comes
+        // back for several monitors. overviewModel() cannot settle it either --
+        // it is scoped to the anchor monitor, so it holds neither another
+        // screen's cards nor, on a non-anchor screen, the local ones.
+        //
+        // The caller resolved which monitor owns the target, so it says so.
+        const targetMonitorName = String(targetMonitorHint ?? "");
 
         GlobalStates.setPendingWindowWorkspace(windowAddress, targetWorkspace);
 

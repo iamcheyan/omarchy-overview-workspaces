@@ -196,6 +196,23 @@ Item { // Window
         root.snapshotPreview();
     }
 
+    // Grabs the same item the freeze frame uses, for callers holding the image
+    // themselves. freezeUrl cannot serve that purpose: it belongs to this
+    // overlay's freeze-frame lifecycle and is cleared as soon as capture goes
+    // inactive, which is exactly what happens mid-drag. Callers also need the
+    // grab result itself, since holding that object is what keeps its
+    // in-memory image alive; a bare url does not own it.
+    //
+    // Deliberately without snapshotPreview's `previewHost.window` check.
+    // Quickshell backs these overlays with its own window class, so an Item's
+    // `window` reads as null here even with the overview on screen and
+    // capturing. Callers are inside an interaction, so the context is live.
+    function grabPreview(callback) {
+        if (!root.anyPreviewContent)
+            return false;
+        return previewHost.grabToImage(callback);
+    }
+
     function snapshotPreview() {
         // Keep the original grab-to-image behavior. Quickshell may return a
         // non-file image URL, which Image can use while ScreencopyView is
