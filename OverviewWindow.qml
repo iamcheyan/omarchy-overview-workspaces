@@ -197,8 +197,11 @@ Item { // Window
     }
 
     // Grabs the same item the freeze frame uses, for callers holding the image
-    // themselves. freezeUrl cannot serve that purpose: it only keeps file: URLs,
-    // while grabToImage hands back an in-memory one.
+    // themselves. freezeUrl cannot serve that purpose: it belongs to this
+    // overlay's freeze-frame lifecycle and is cleared as soon as capture goes
+    // inactive, which is exactly what happens mid-drag. Callers also need the
+    // grab result itself, since holding that object is what keeps its
+    // in-memory image alive; a bare url does not own it.
     //
     // Deliberately without snapshotPreview's `previewHost.window` check.
     // Quickshell backs these overlays with its own window class, so an Item's
