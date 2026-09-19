@@ -2,10 +2,10 @@
 
 ## 0.1.10
 
-- Use one Windows-style MRU order for the Overview grid, top-bar workspace
-  buttons, Win+number navigation, and Win+Tab switching. Occupied workspaces
-  move to the front when focused; empty/native slots and the New workspace card
-  remain outside MRU and stay after occupied workspaces.
+- Added an MRU workspace-ordering switch. With MRU off, Overview and the top bar
+  use fixed native workspace numbers, and Win+number keeps its normal stable
+  meaning. With MRU on, Overview and Win+number follow recent-use order while
+  the top bar shows `WORKSPACE` instead of ambiguous numeric slots.
 
 ## 0.1.9
 
@@ -110,22 +110,22 @@ Enabling automatically replaces the built-in workspace indicator; disabling rest
 
 Open the gear button in the top bar to choose a mode.
 
-**Occupied workspaces only**
+**MRU workspace ordering ON**
 
 - Workspaces with windows are displayed in Windows-style MRU order.
 - Win+1 through Win+0 follow those visual slots.
 - The New workspace card always stays last.
-- The top bar and Overview use the same order.
+- The top bar shows `WORKSPACE` rather than numbers, so it does not imply that
+  an MRU slot is a permanent workspace ID.
 
-**System native order**
+**MRU workspace ordering OFF**
 
-- Keeps occupied workspaces in MRU order while also showing native empty slots.
-- Empty workspaces 1–10 remain visible.
-- Existing workspaces 11, 12, 13, and higher remain visible.
-- Native IDs are not renumbered.
-- Native Win+number behavior is restored while Overview and Win+Tab remain available.
+- Overview and the top bar use fixed numeric order.
+- The top bar displays real workspace IDs such as `1 2 3 4 5`.
+- Win+1 through Win+0 use the stable native workspace IDs.
+- Empty workspaces 1–10 remain available, and real workspaces above 10 remain visible.
 
-Changing the mode updates the top bar, Overview, and keyboard behavior together.
+Changing the switch updates the top bar, Overview, and keyboard behavior together.
 
 ### Search
 

@@ -46,7 +46,8 @@ Singleton {
         const _refresh = GlobalStates.overviewRefreshSerial;
         const _order = WorkspaceOrder.revision;
         const _mru = GlobalStates.overviewWorkspaceMru;
-        void _serial; void _refresh; void _order; void _mru;
+        const _sortMode = GlobalStates.overviewSortMode;
+        void _serial; void _refresh; void _order; void _mru; void _sortMode;
         return root.overviewWorkspaceEntriesGroupedByMonitor() ?? [];
     }
 
@@ -220,9 +221,10 @@ Singleton {
     }
 
     function overviewWorkspaceEntriesForMonitor(monitorName, appendTrailing, reservedWorkspaceIds, orderByMru, includeEmptySystemSlots) {
-        // Keep the argument for compatibility with older callers, but make
-        // MRU the one presentation order everywhere.
-        const useMruOrder = true;
+        // Keep the argument for compatibility with older callers. The setting
+        // is the single source of truth: when MRU is off, Overview must remain
+        // in the same fixed numeric order as the top bar.
+        const useMruOrder = GlobalStates.overviewSortMode === "legacy";
         const targetMonitor = monitorName ?? "";
         const showEmptySystemSlots = includeEmptySystemSlots ?? (targetMonitor.length === 0);
         const reserved = reservedWorkspaceIds ?? {};
@@ -321,8 +323,8 @@ Singleton {
             });
         });
 
-        // Every presentation uses MRU ordering for occupied workspaces. The
-        // system mode only controls whether empty native slots are included.
+        // MRU mode uses the persisted optimized order; fixed mode uses the
+        // native numeric order. This keeps Overview and the bar aligned.
         const orderedIds = useSystemOrder
             ? withWindows.map(entry => entry.id).sort((a, b) => a - b)
             : (targetMonitor.length > 0

@@ -105,14 +105,50 @@ test('guards the binding transaction against its own configreloaded event', () =
     assert.match(source, /bindingApplyGuard\.restart\(\)/);
     assert.match(source, /if \(bindingApplyGuard\.running\)/);
 });
+test('coalesces Overview model reconciliation inside the widget lifecycle', () => {
+    const source = fs.readFileSync(require.resolve('../OverviewWidget.qml'), 'utf8');
+    assert.doesNotMatch(source, /onOverviewEntriesChanged:\s*Qt\.callLater\(root\.reconcileFocusedWorkspace\)/);
+    assert.match(source, /id:\s*reconcileFocusedWorkspaceTimer/);
+    assert.match(source, /onTriggered:\s*root\.reconcileFocusedWorkspace\(\)/);
+    assert.match(source, /onOverviewEntriesChanged:\s*reconcileFocusedWorkspaceTimer\.restart\(\)/);
+});
 test('bar widget provides a mouse fallback into Overview', () => {
     const source = fs.readFileSync(require.resolve('../bar/widget.qml'), 'utf8');
     assert.match(source, /function openOverview\(\)\s*\{\s*Local\.GlobalStates\.overviewOpen = true;/);
-    assert.equal((source.match(/buttonCode === Qt\.RightButton/g) ?? []).length, 2);
+    assert.equal((source.match(/buttonCode === Qt\.RightButton/g) ?? []).length, 3);
     assert.match(source, /acceptedButtons:\s*Qt\.RightButton/);
     assert.match(source, /onClicked: root\.openOverview\(\)/);
     assert.match(source, /if \(buttonCode === Qt\.RightButton\)\s*\n\s*root\.openOverview\(\)/);
     assert.match(source, /else\s*\n\s*root\.focusWorkspace\(modelData\)/);
+});
+test('bar workspace model observes focus refreshes and uses the shared focused id', () => {
+    const source = fs.readFileSync(require.resolve('../bar/widget.qml'), 'utf8');
+    assert.match(source, /Local\.HyprlandData\.dataSerial/);
+    assert.match(source, /return Hyprland\.focusedWorkspace\?\.id \?\? -1/);
+    assert.doesNotMatch(source, /focusedWorkspaceId: Local\.HyprlandData\.activeWorkspace/);
+    assert.match(source, /readonly property int focusedWorkspaceId/);
+    assert.match(source, /root\.focusedWorkspaceId === modelData/);
+    assert.match(source, /text: modelData === 10 \? "0" : String\(modelData\)/);
+    assert.match(source, /active: focused/);
+    assert.doesNotMatch(source, /text: focused\s*\n\s*\? "\\uDB85\\uDCFB"/);
+    assert.match(source, /text: "Workspaces"/);
+    assert.match(source, /visible: root\.mruEnabled/);
+    assert.match(source, /visible: !root\.mruEnabled/);
+});
+
+test('Overview cards display real workspace IDs in MRU mode', () => {
+    const source = fs.readFileSync(require.resolve('../OverviewWidget.qml'), 'utf8');
+    assert.match(source, /globalSlotForWorkspaceId/);
+    assert.match(source, /anchors\.right: parent\.right/);
+    assert.match(source, /root\.globalSlotForWorkspaceId\(modelData\.id\)/);
+    assert.match(source, /modelData\.id/);
+    assert.match(source, /z: root\.windowZ \+ 10/);
+    assert.match(source, /text: modelData\.isTrailingEmpty\s*\n\s*\? "New workspace"/);
+    assert.match(source, /`Workspace \$\{/);
+    assert.match(source, /border\.width: 1/);
+    assert.match(source, /ColorUtils\.mix\(TuiStyle\.accent, TuiStyle\.bg, 0\.18\)/);
+    assert.match(source, /ColorUtils\.mix\(TuiStyle\.bg, TuiStyle\.accent, 0\.12\)/);
+    assert.match(source, /color: TuiStyle\.fg/);
 });
 
 test('restores native number bindings only for an owned legacy to system handoff', () => {

@@ -15,8 +15,21 @@ BarWidget {
         : false
 
     readonly property string targetMonitorName: Hyprland.focusedMonitor?.name ?? ""
-    readonly property bool legacySort: Local.GlobalStates.overviewSortMode === "legacy"
+    readonly property bool mruEnabled: Local.GlobalStates.overviewSortMode === "legacy"
+    readonly property int focusedWorkspaceId: {
+        // MRU changes the visual order, not the compositor's focused workspace.
+        // Depend on the shared refresh serial, but always read the live Hyprland
+        // focus object so a stale derived activeWorkspace cannot pin the marker.
+        const _dataSerial = Local.HyprlandData.dataSerial;
+        void _dataSerial;
+        return Hyprland.focusedWorkspace?.id ?? -1;
+    }
     readonly property var workspaceIds: {
+        // The workspace object collection can keep the same identity while
+        // focus moves between existing workspaces. Depend on the data serial
+        // so the bar recomputes its MRU order after every focus change.
+        const _dataSerial = Local.HyprlandData.dataSerial;
+        void _dataSerial;
         const mode = Local.GlobalStates.overviewSortMode;
         const all = Hyprland.workspaces.values
             .map(workspace => Number(workspace.id))
@@ -36,10 +49,12 @@ BarWidget {
         const mru = Local.GlobalStates.overviewWorkspaceMru ?? [];
         const ordered = [];
         const added = ({});
-        for (const id of mru) {
-            if (occupiedSet[id] && !added[id]) {
-                ordered.push(id);
-                added[id] = true;
+        if (root.mruEnabled) {
+            for (const id of mru) {
+                if (occupiedSet[id] && !added[id]) {
+                    ordered.push(id);
+                    added[id] = true;
+                }
             }
         }
         for (const id of visual) {
@@ -74,7 +89,8 @@ BarWidget {
         settingsPanelLoader.item.hostWidget = root;
     }
 
-    implicitWidth: workspaceRow.implicitWidth + button.implicitWidth
+    implicitWidth: (root.mruEnabled ? mruLabel.implicitWidth : workspaceRow.implicitWidth)
+        + button.implicitWidth
     implicitHeight: button.implicitHeight
     onBarChanged: injectPanel()
     onSettingsChanged: { applySettings(); injectPanel(); }
@@ -99,8 +115,25 @@ BarWidget {
     }
 
     WidgetButton {
+        id: mruLabel
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.mruEnabled
+        z: 1
+        bar: root.bar
+        text: "Workspaces"
+        tooltipText: "MRU workspace order"
+        onPressed: function(buttonCode) {
+            if (buttonCode === Qt.RightButton)
+                root.openOverview();
+            else if (buttonCode === Qt.LeftButton)
+                root.toggle();
+        }
+    }
+
+    WidgetButton {
         id: button
-        anchors.left: workspaceRow.right
+        anchors.left: root.mruEnabled ? mruLabel.right : workspaceRow.right
         anchors.verticalCenter: parent.verticalCenter
         width: implicitWidth
         height: parent.height
@@ -122,27 +155,26 @@ BarWidget {
         anchors.verticalCenter: parent.verticalCenter
         height: parent.height
         spacing: Style.space(1)
+        visible: !root.mruEnabled
 
         Repeater {
             model: root.workspaceIds
 
             WidgetButton {
                 required property int modelData
-                required property int index
-                readonly property bool focused: Hyprland.focusedWorkspace?.id === modelData
+                readonly property bool focused: root.focusedWorkspaceId === modelData
                 readonly property var workspace: Local.HyprlandData.workspaceById[modelData]
                 readonly property bool occupied: !!workspace
                     && Local.HyprlandData.workspaceHasVisibleWindows(modelData)
 
                 bar: root.bar
                 fontFamily: "JetBrainsMono Nerd Font"
-                // Original mode uses visual slots, while System mode mirrors
-                // the native bar's actual workspace numbers.
-                text: focused
-                    ? "\uDB85\uDCFB"
-                    : root.legacySort
-                        ? String(index + 1)
-                        : (modelData === 10 ? "0" : String(modelData))
+                // MRU controls the order of the buttons, but the label must
+                // remain the real Hyprland workspace ID. Otherwise the focused
+                // workspace is always drawn as the first visual slot and looks
+                // like workspace 1 after every MRU promotion.
+                text: modelData === 10 ? "0" : String(modelData)
+                active: focused
                 opacity: occupied || focused ? 1 : 0.5
                 horizontalMargin: 6
                 verticalPadding: 6

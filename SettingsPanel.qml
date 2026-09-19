@@ -176,7 +176,7 @@ Panel {
                         spacing: Style.space(10)
 
                         Text {
-                            text: "Overview workspace ordering"
+                            text: "Workspace ordering"
                             width: parent.width
                             wrapMode: Text.WordWrap
                             color: root.panelForeground
@@ -186,7 +186,7 @@ Panel {
                         }
 
                         Text {
-                            text: "Choose whether native empty workspace slots are shown; occupied workspaces always follow MRU order."
+                            text: "Choose whether workspace numbers stay fixed or follow recent use."
                             width: parent.width
                             wrapMode: Text.WordWrap
                             color: root.panelMuted
@@ -194,51 +194,14 @@ Panel {
                             font.pixelSize: Style.font.body
                         }
 
-                        Repeater {
-                            model: [
-                                { key: "legacy", title: "Occupied workspaces only", detail: "Shows occupied workspaces in MRU order; the New workspace card stays last." },
-                                { key: "system", title: "Show native empty slots", detail: "Keeps native slots 1–10 and real 11+ workspaces visible; occupied slots still follow MRU order." }
-                            ]
-
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: menuColumn.width
-                                height: optionColumn.implicitHeight + Style.space(16)
-                                color: GlobalStates.overviewSortMode === modelData.key
-                                    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
-                                    : Util.alpha(Color.popups.text, 0.06)
-                                border.width: 1
-                                border.color: GlobalStates.overviewSortMode === modelData.key ? Color.accent : Color.popups.border
-
-                                Column {
-                                    id: optionColumn
-                                    anchors.fill: parent
-                                    anchors.margins: Style.space(8)
-                                    spacing: Style.space(2)
-                                    Text {
-                                        text: modelData.title
-                                        width: parent.width
-                                        wrapMode: Text.WordWrap
-                                        color: root.panelForeground
-                                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                                        font.pixelSize: Style.font.body
-                                        font.bold: true
-                                    }
-                                    Text {
-                                        text: modelData.detail
-                                        width: parent.width
-                                        wrapMode: Text.WordWrap
-                                        color: root.panelMuted
-                                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: root.persistMode(modelData.key)
-                                }
-                            }
+                        ToggleRow {
+                            width: menuColumn.width
+                            title: "MRU workspace ordering"
+                            detail: GlobalStates.overviewSortMode === "legacy"
+                                ? "ON — Overview follows recent use; the top bar shows WORKSPACE."
+                                : "OFF — Overview and the top bar stay in fixed numeric order."
+                            checked: GlobalStates.overviewSortMode === "legacy"
+                            onToggled: root.persistMode(checked ? "system" : "legacy")
                         }
 
                         Rectangle {
