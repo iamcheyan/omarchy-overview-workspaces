@@ -106,6 +106,12 @@ test('opens Overview on Super-down and cancels speculative opens for chords', ()
     assert.match(source, /data === "hancore-overview-super,interrupt"[\s\S]*GlobalStates\.overviewOpen = false/);
     assert.match(source, /overviewOpenedBySuperDown[\s\S]*Do not[\s\S]*toggle it again/);
 });
+test('does not interrupt Win+Tab before its GlobalShortcut receives Tab', () => {
+    const source = fs.readFileSync(require.resolve('../KeybindingService.qml'), 'utf8');
+    assert.match(source, /isOverviewNavigationKey/);
+    assert.match(source, /code == 23 or code == 50 or code == 62/);
+    assert.match(source, /any and not isOverviewNavigationKey/);
+});
 test('guards the binding transaction against its own configreloaded event', () => {
     const source = fs.readFileSync(require.resolve('../KeybindingService.qml'), 'utf8');
     assert.match(source, /id: bindingApplyGuard/);
