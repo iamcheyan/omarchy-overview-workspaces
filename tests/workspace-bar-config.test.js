@@ -112,6 +112,28 @@ test('coalesces Overview model reconciliation inside the widget lifecycle', () =
     assert.match(source, /onTriggered:\s*root\.reconcileFocusedWorkspace\(\)/);
     assert.match(source, /onOverviewEntriesChanged:\s*reconcileFocusedWorkspaceTimer\.restart\(\)/);
 });
+test('bridges window drags across per-monitor overview surfaces', () => {
+    const bridge = fs.readFileSync(require.resolve('../CrossMonitorDrag.qml'), 'utf8');
+    const widget = fs.readFileSync(require.resolve('../OverviewWidget.qml'), 'utf8');
+    const navigation = fs.readFileSync(require.resolve('../WorkspaceNavigation.qml'), 'utf8');
+    const qmldir = fs.readFileSync(require.resolve('../qmldir'), 'utf8');
+
+    assert.match(qmldir, /singleton CrossMonitorDrag 1\.0 CrossMonitorDrag\.qml/);
+    assert.match(bridge, /property int generation/);
+    assert.match(bridge, /surfaceMonitorName/);
+    assert.match(bridge, /workspaceMonitorName/);
+    assert.match(bridge, /function updatePointer/);
+    assert.match(bridge, /function setPreview/);
+    assert.match(widget, /CrossMonitorDrag\.publishTarget/);
+    assert.match(widget, /root\.monitorOriginX \+ point\.x/);
+    assert.match(widget, /root\.monitorOriginY \+ point\.y/);
+    assert.match(widget, /CrossMonitorDrag\.updatePointer/);
+    assert.match(widget, /CrossMonitorDrag\.hoveredTarget/);
+    assert.match(widget, /window\.grabPreview/);
+    assert.match(widget, /commitWindowDrag\([^\n]+targetMonitor/);
+    assert.match(navigation, /function commitWindowDrag\([^\n]+targetMonitorHint/);
+    assert.match(navigation, /overviewDraggingTargetMonitor/);
+});
 test('bar widget provides a mouse fallback into Overview', () => {
     const source = fs.readFileSync(require.resolve('../bar/widget.qml'), 'utf8');
     assert.match(source, /function openOverview\(\)\s*\{\s*Local\.GlobalStates\.overviewOpen = true;/);

@@ -230,6 +230,7 @@ Scope {
                 target: GlobalStates
                 function onOverviewOpenChanged() {
                     if (!GlobalStates.overviewOpen) {
+                        CrossMonitorDrag.end();
                         const settled = GlobalStates.overviewFocusedWorkspaceId > 0
                             ? GlobalStates.overviewFocusedWorkspaceId
                             : overviewScope.currentWorkspaceId();

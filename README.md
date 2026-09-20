@@ -1,5 +1,17 @@
 # Overview Workspaces
 
+## 0.1.11
+
+- Added cross-monitor window dragging in Overview. While the workspace preview
+  is open, drag a window from a card on one display to a workspace card on
+  another display and release it there.
+- Shows a temporary window proxy and highlights the destination workspace while
+  dragging across displays.
+- Resolves the destination by its owning monitor, so duplicate temporary
+  workspace IDs remain unambiguous.
+- Keeps the existing same-monitor drag behavior, thumbnail capture lifecycle,
+  native mouse bindings, and plugin shortcut ownership unchanged.
+
 ## 0.1.10
 
 - Added an MRU workspace-ordering switch. With MRU off, Overview and the top bar
@@ -72,6 +84,8 @@ Overview Workspaces has been approved and verified in the Omarchy plugin marketp
 - Empty workspaces remain visible when using native ordering.
 - A New workspace card always stays at the end of each monitor's list.
 - Mouse selection, window focusing, drag-and-drop, and multi-monitor layouts.
+- Cross-monitor drag-and-drop: move a window directly between workspace cards
+  shown on different displays.
 - Press `Ctrl+Shift+X` in Overview to arm force-kill mode; the cursor becomes a
   crosshair, and clicking a window kills only that client. Press `Escape` or
   right-click to cancel without killing anything.

@@ -26,7 +26,7 @@ qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" \
 
 验收标准：
 
-- `node --test` 全部通过；测试数量以当前仓库为准（目前为 51 个）。
+- `node --test` 全部通过；测试数量以当前仓库为准（目前为 55 个）。
 - `omarchy plugin validate .` 返回成功且没有 manifest 错误。
 - `qmllint` 不出现新的 QML 错误。某些环境下由于 Quickshell 的运行时导入路径，
   可能出现 `Failed to import QtQuick` 或未解析 composite type 警告；这类警告
@@ -79,6 +79,15 @@ OMARCHY_SHELL_IPC_TIMEOUT=1s \
 3. 右键点击数字之间的空隙：打开 Overview。
 4. 左键点击工作区数字：仍然切换工作区。
 5. 左键点击齿轮：仍然打开设置面板。
+
+如果连接了多个显示器，还要确认跨屏拖拽：
+
+6. 打开 Overview，从 1 号显示器的窗口卡片拖到 2 号显示器的工作区卡片，
+   目标卡片应高亮并显示窗口代理，释放后窗口应移动到目标工作区所属的显示器。
+7. 再从 2 号显示器拖回 1 号显示器，确认两个方向都能工作；也要测试目标为
+   `New workspace` 卡片的情况。
+8. 按 `Escape` 或在卡片外释放取消拖拽，确认不会留下代理、卡片高亮或悬挂的
+   工作区移动状态。
 
 Overview 打开后应看到 `quickshell:overview` layer，关闭后该 layer 应消失，
 `omarchy-bar` 应保持存在。

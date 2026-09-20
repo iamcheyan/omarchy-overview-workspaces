@@ -199,6 +199,15 @@ Item { // Window
         root.snapshotPreview();
     }
 
+    // Return the grab result itself so the caller can keep the in-memory image
+    // alive while a window is dragged across monitor surfaces. This is separate
+    // from freezeUrl, which belongs to the capture replacement lifecycle.
+    function grabPreview(callback) {
+        if (!root.anyPreviewContent)
+            return false;
+        return previewHost.grabToImage(callback);
+    }
+
     function snapshotPreview() {
         // Keep the original grab-to-image behavior. Quickshell may return a
         // non-file image URL, which Image can use while ScreencopyView is

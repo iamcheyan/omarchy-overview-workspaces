@@ -166,25 +166,28 @@ Singleton {
         GlobalStates.overviewDraggingFromWorkspace = -1;
         GlobalStates.overviewDraggingTargetWorkspace = -1;
         GlobalStates.overviewDraggingTargetIsTrailing = false;
+        GlobalStates.overviewDraggingTargetMonitor = "";
     }
 
     function beginWindowDrag(fromWorkspaceId) {
         GlobalStates.overviewDraggingFromWorkspace = fromWorkspaceId ?? -1;
     }
 
-    function setDragTarget(workspaceId, isTrailing) {
+    function setDragTarget(workspaceId, isTrailing, workspaceMonitorName) {
         GlobalStates.overviewDraggingTargetWorkspace = workspaceId;
         GlobalStates.overviewDraggingTargetIsTrailing = isTrailing;
+        GlobalStates.overviewDraggingTargetMonitor = String(workspaceMonitorName ?? "");
     }
 
     function clearDragTarget(workspaceId) {
         if (GlobalStates.overviewDraggingTargetWorkspace === workspaceId) {
             GlobalStates.overviewDraggingTargetWorkspace = -1;
             GlobalStates.overviewDraggingTargetIsTrailing = false;
+            GlobalStates.overviewDraggingTargetMonitor = "";
         }
     }
 
-    function commitWindowDrag(windowAddress, currentWorkspaceId, targetWorkspace, targetIsTrailing) {
+    function commitWindowDrag(windowAddress, currentWorkspaceId, targetWorkspace, targetIsTrailing, targetMonitorHint) {
         root.resetOverviewDragState();
         if (!windowAddress || targetWorkspace === -1 || targetWorkspace === currentWorkspaceId)
             return false;
@@ -193,9 +196,9 @@ Singleton {
             .filter(win => win.mapped && !win.hidden);
         const sourceIsEmptyAfterMove = sourceVisibleWindows.length <= 1;
 
-        const model = root.overviewModel();
-        const entry = model.find(item => item.id === targetWorkspace);
-        const targetMonitorName = entry?.monitorName ?? "";
+        // IDs of trailing cards may repeat per monitor. The caller resolves the
+        // owning monitor from the rendered card before reaching this function.
+        const targetMonitorName = String(targetMonitorHint ?? "");
 
         GlobalStates.setPendingWindowWorkspace(windowAddress, targetWorkspace);
 

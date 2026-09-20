@@ -38,6 +38,7 @@ Singleton {
     property int overviewDraggingFromWorkspace: -1
     property int overviewDraggingTargetWorkspace: -1
     property bool overviewDraggingTargetIsTrailing: false
+    property string overviewDraggingTargetMonitor: ""
     property var overviewSuppressedEmptyWorkspaceIds: []
     property var overviewPendingWorkspaceMonitorById: ({})
     property var overviewPendingOccupiedWorkspaces: []

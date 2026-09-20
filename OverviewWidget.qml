@@ -100,6 +100,12 @@ Item {
     property var windowByAddress: ServiceManager.workspace.windowByAddress
     property var monitorData: ServiceManager.workspace.monitors.find(m => m.id === root.monitor?.id)
 
+    // Hyprland monitor positions and QML surface coordinates are both in
+    // logical units. Add the monitor origin to convert a local point into the
+    // shared coordinate space used by CrossMonitorDrag.
+    readonly property real monitorOriginX: root.monitorData?.x ?? 0
+    readonly property real monitorOriginY: root.monitorData?.y ?? 0
+
     // ── Adaptive scaling ──
     // Overview (工作区概览): full-screen grid, auto-select optimal columns
     // Overview switching mode (Win+Tab): current-monitor preview, use config scale value
@@ -548,6 +554,75 @@ Item {
 
     onOverviewEntriesChanged: reconcileFocusedWorkspaceTimer.restart()
 
+    // A dragged window remains visually attached to the source surface. When
+    // it crosses to another monitor, draw a lightweight proxy on the target
+    // surface so the destination card and pointer still have visible context.
+    Rectangle {
+        id: crossDragProxy
+
+        readonly property var windowData: CrossMonitorDrag.active
+            ? (ServiceManager.workspace.windowByAddress?.[CrossMonitorDrag.windowAddress] ?? null)
+            : null
+
+        visible: CrossMonitorDrag.active
+            && CrossMonitorDrag.sourceMonitorName !== (root.monitor?.name ?? "")
+            && CrossMonitorDrag.pointerX >= root.monitorOriginX
+            && CrossMonitorDrag.pointerX <= root.monitorOriginX + root.width
+            && CrossMonitorDrag.pointerY >= root.monitorOriginY
+            && CrossMonitorDrag.pointerY <= root.monitorOriginY + root.height
+        width: Math.max(120, CrossMonitorDrag.sourceWidth)
+        height: Math.max(80, CrossMonitorDrag.sourceHeight)
+        x: CrossMonitorDrag.pointerX - root.monitorOriginX - width / 2
+        y: CrossMonitorDrag.pointerY - root.monitorOriginY - height / 2
+        z: root.windowDraggingZ + 10
+        radius: 8
+        color: Appearance.colors.colSurfaceContainerLow
+        border.width: 2
+        border.color: Appearance.colors.colOnLayer1
+        opacity: 0.85
+
+        Image {
+            id: proxyPreview
+            anchors.fill: parent
+            anchors.margins: 2
+            source: CrossMonitorDrag.previewUrl
+            fillMode: Image.PreserveAspectCrop
+            smooth: true
+            cache: false
+            visible: status === Image.Ready
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 4
+            visible: !proxyPreview.visible
+
+            Image {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 32
+                Layout.preferredHeight: 32
+                source: AppSearch.iconSource(AppSearch.guessIcon(
+                    crossDragProxy.windowData?.class ?? crossDragProxy.windowData?.initialClass ?? ""))
+                fillMode: Image.PreserveAspectFit
+                visible: status === Image.Ready
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                text: crossDragProxy.windowData?.title
+                    ?? crossDragProxy.windowData?.initialTitle
+                    ?? ""
+                color: Appearance.colors.colOnLayer1
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                maximumLineCount: 2
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
     // ── Wheel scroll anywhere cycles workspaces ──
     MouseArea {
         anchors.fill: parent
@@ -643,12 +718,35 @@ Item {
                     property color hoveredBorderColor: Appearance.colors.colLayer2Hover
                     property bool hoveredWhileDragging: false
 
+                    Connections {
+                        target: CrossMonitorDrag
+                        function onActiveChanged() {
+                            if (!CrossMonitorDrag.active)
+                                return;
+                            const point = workspace.mapToItem(null, 0, 0);
+                            CrossMonitorDrag.publishTarget(
+                                root.monitor?.name ?? "",
+                                workspace.monitorName,
+                                workspace.workspaceValue,
+                                workspace.isTrailingEmpty,
+                                root.monitorOriginX + point.x,
+                                root.monitorOriginY + point.y,
+                                workspace.width,
+                                workspace.height);
+                        }
+                    }
+
+                    readonly property bool crossHovered: CrossMonitorDrag.active
+                        && CrossMonitorDrag.sourceMonitorName !== (root.monitor?.name ?? "")
+                        && CrossMonitorDrag.hoveredTarget?.id === workspace.workspaceValue
+                        && CrossMonitorDrag.hoveredTarget?.surfaceMonitorName === (root.monitor?.name ?? "")
+
                     readonly property bool isFocused: workspaceValue === root.highlightedWorkspaceId
                     x: root.entryX(index)
                     y: root.entryY(index)
                     width: root.entryWidth(index)
                     height: root.entryHeight(index)
-                    color: hoveredWhileDragging ? hoveredWorkspaceColor : defaultWorkspaceColor
+                    color: (hoveredWhileDragging || crossHovered) ? hoveredWorkspaceColor : defaultWorkspaceColor
                     topLeftRadius: root.largeWorkspaceRadius
                     topRightRadius: root.largeWorkspaceRadius
                     bottomLeftRadius: root.largeWorkspaceRadius
@@ -727,7 +825,7 @@ Item {
                     DropArea {
                         anchors.fill: parent
                         onEntered: {
-                            WorkspaceNavigation.setDragTarget(workspace.workspaceValue, workspace.isTrailingEmpty)
+                            WorkspaceNavigation.setDragTarget(workspace.workspaceValue, workspace.isTrailingEmpty, workspace.monitorName)
                             if (GlobalStates.overviewDraggingFromWorkspace === GlobalStates.overviewDraggingTargetWorkspace) return;
                             hoveredWhileDragging = true
                         }
@@ -916,6 +1014,11 @@ Item {
                             const point = mapToItem(root, mouse.x, mouse.y);
                             root.pointerX = point.x;
                             root.pointerY = point.y;
+                            if (window.pressed) {
+                                const globalPoint = dragArea.mapToItem(null, mouse.x, mouse.y);
+                                CrossMonitorDrag.updatePointer(root.monitorOriginX + globalPoint.x,
+                                    root.monitorOriginY + globalPoint.y);
+                            }
                         }
                         onEntered: {
                             window.hovered = true
@@ -945,8 +1048,20 @@ Item {
                                 window.pressed = true;
                                 return;
                             }
+                            // Middle click closes onClicked; it must not arm a drag.
+                            if (mouse.button !== Qt.LeftButton)
+                                return;
                             window.snapshotPreview()
-                            WorkspaceNavigation.beginWindowDrag(window.windowData?.workspace.id)
+                            WorkspaceNavigation.beginWindowDrag(window.windowData?.workspace?.id)
+                            const press = dragArea.mapToItem(null, mouse.x, mouse.y)
+                            CrossMonitorDrag.begin(window.windowData?.address,
+                                window.windowData?.workspace?.id,
+                                root.monitor?.name ?? "",
+                                window.width, window.height,
+                                root.monitorOriginX + press.x,
+                                root.monitorOriginY + press.y)
+                            const generation = CrossMonitorDrag.generation
+                            window.grabPreview(result => CrossMonitorDrag.setPreview(result, generation))
                             window.pressed = true
                             window.Drag.active = true
                             window.Drag.source = window
@@ -958,13 +1073,26 @@ Item {
                                 window.pressed = false;
                                 return;
                             }
-                            const targetWorkspace = GlobalStates.overviewDraggingTargetWorkspace
-                            const targetIsTrailing = GlobalStates.overviewDraggingTargetIsTrailing
+                            if (!window.pressed)
+                                return;
+                            const crossTarget = CrossMonitorDrag.hoveredTarget
+                            const useCross = !!crossTarget
+                                && crossTarget.surfaceMonitorName !== (root.monitor?.name ?? "")
+                            const targetWorkspace = useCross
+                                ? crossTarget.id
+                                : GlobalStates.overviewDraggingTargetWorkspace
+                            const targetIsTrailing = useCross
+                                ? crossTarget.isTrailing
+                                : GlobalStates.overviewDraggingTargetIsTrailing
+                            const targetMonitor = useCross
+                                ? crossTarget.workspaceMonitorName
+                                : GlobalStates.overviewDraggingTargetMonitor
+                            CrossMonitorDrag.end()
                             window.pressed = false
                             window.holdCurrentPosition()
                             window.Drag.active = false
                             window.restorePositionBinding()
-                            if (WorkspaceNavigation.commitWindowDrag(window.windowData?.address, window.windowData?.workspace.id, targetWorkspace, targetIsTrailing)) {
+                            if (WorkspaceNavigation.commitWindowDrag(window.windowData?.address, window.windowData?.workspace?.id, targetWorkspace, targetIsTrailing, targetMonitor)) {
                                 window.releaseHeldPosition()
                                 return
                             }
