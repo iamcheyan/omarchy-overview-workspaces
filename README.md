@@ -1,5 +1,13 @@
 # Overview Workspaces
 
+## 0.1.12
+
+- Win+number workspace shortcuts now use the workspace slots belonging to the
+  currently focused monitor. They no longer always resolve against the first
+  monitor in the combined Overview model.
+- This applies consistently to MRU and native ordering modes, including each
+  monitor's `New workspace` slot.
+
 ## 0.1.11
 
 - Added cross-monitor window dragging in Overview. While the workspace preview

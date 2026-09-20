@@ -99,18 +99,20 @@ Scope {
         return WorkspaceNavigation.currentWorkspaceId();
     }
 
-    // Numeric workspace shortcuts address global visual slots, not raw
-    // Hyprland IDs. Use the same monitor-grouped model rendered by Overview so
-    // numbering continues across monitors. The trailing slot's raw ID may
-    // recycle an empty workspace, so always relocate it to the target monitor
-    // rather than gating on whether it pre-existed.
+    // Numeric workspace shortcuts address visual slots on the currently focused
+    // monitor, not raw Hyprland IDs and not the first monitor in the global
+    // overview model. The trailing slot's raw ID may recycle an empty workspace,
+    // so always relocate it to the focused monitor rather than gating on whether
+    // it pre-existed.
     function focusWorkspaceSlot(slot) {
         if (slot < 1)
             return;
 
-        let entries = ServiceManager.workspace.overviewWorkspaceEntries ?? [];
-        if (entries.length === 0)
-            entries = ServiceManager.workspace.overviewWorkspaceEntriesGlobal(true);
+        const focusedMonitorName = Hyprland.focusedMonitor?.name ?? "";
+        const entries = focusedMonitorName.length > 0
+            ? ServiceManager.workspace.overviewWorkspaceEntriesForMonitor(
+                focusedMonitorName, true, {}, true, true)
+            : (ServiceManager.workspace.overviewWorkspaceEntries ?? []);
 
         const entry = entries[slot - 1];
         if (!entry)

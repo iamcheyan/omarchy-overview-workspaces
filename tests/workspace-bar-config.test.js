@@ -134,6 +134,12 @@ test('bridges window drags across per-monitor overview surfaces', () => {
     assert.match(navigation, /function commitWindowDrag\([^\n]+targetMonitorHint/);
     assert.match(navigation, /overviewDraggingTargetMonitor/);
 });
+test('Win-number slots follow the focused monitor', () => {
+    const source = fs.readFileSync(require.resolve('../Overview.qml'), 'utf8');
+    assert.match(source, /Hyprland\.focusedMonitor\?\.name/);
+    assert.match(source, /overviewWorkspaceEntriesForMonitor\(\s*\n?\s*focusedMonitorName/);
+    assert.doesNotMatch(source, /let entries = ServiceManager\.workspace\.overviewWorkspaceEntries/);
+});
 test('bar widget provides a mouse fallback into Overview', () => {
     const source = fs.readFileSync(require.resolve('../bar/widget.qml'), 'utf8');
     assert.match(source, /function openOverview\(\)\s*\{\s*Local\.GlobalStates\.overviewOpen = true;/);

@@ -26,7 +26,7 @@ qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" \
 
 验收标准：
 
-- `node --test` 全部通过；测试数量以当前仓库为准（目前为 55 个）。
+- `node --test` 全部通过；测试数量以当前仓库为准（目前为 56 个）。
 - `omarchy plugin validate .` 返回成功且没有 manifest 错误。
 - `qmllint` 不出现新的 QML 错误。某些环境下由于 Quickshell 的运行时导入路径，
   可能出现 `Failed to import QtQuick` 或未解析 composite type 警告；这类警告
