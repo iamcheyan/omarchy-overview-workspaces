@@ -45,6 +45,15 @@ Singleton {
     // again once the current batch exits.
     property bool guardsPending: false
 
+    // Owned by this singleton so a plugin hot reload cannot leave a deferred
+    // retry holding a dead QML function/context alive.
+    Timer {
+        id: guardRetryTimer
+        interval: 0
+        repeat: false
+        onTriggered: root.evaluateGuards()
+    }
+
     function evaluateGuards() {
         // The running check comes first: clearing whenResults for an item set with
         // no guards while a batch is still in flight would let that batch write
@@ -163,12 +172,12 @@ Singleton {
             // the status is what tells us.
             if (exitCode !== 0 || exitStatus !== 0) {
                 if (root.guardsPending)
-                    Qt.callLater(() => root.evaluateGuards());
+                    guardRetryTimer.restart();
                 return;
             }
             root.whenResults = MenuIndex.parseGuardReply(guardProc.collected);
             if (root.guardsPending)
-                Qt.callLater(() => root.evaluateGuards());
+                guardRetryTimer.restart();
         }
     }
 }

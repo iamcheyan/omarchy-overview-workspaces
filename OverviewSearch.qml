@@ -15,6 +15,20 @@ Item {
     property int maxAppResults: 5
     property int maxWindowResults: 7
     property int maxMenuResults: 6
+    property var pendingApp: null
+
+    Timer {
+        id: launchAppTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (!root.pendingApp)
+                return;
+            AppSearch.launchApp(root.pendingApp);
+            root.pendingApp = null;
+            GlobalStates.overviewOpen = false;
+        }
+    }
 
     readonly property string normalizedQuery: query.trim()
     readonly property bool commandMode: normalizedQuery.startsWith(">")
@@ -74,10 +88,8 @@ Item {
         if (!app)
             return;
         Hyprland.dispatch('hl.dsp.focus({ workspace = "empty" })');
-        Qt.callLater(() => {
-            AppSearch.launchApp(app);
-            GlobalStates.overviewOpen = false;
-        });
+        root.pendingApp = app;
+        launchAppTimer.restart();
     }
 
     function focusWindow(win) {

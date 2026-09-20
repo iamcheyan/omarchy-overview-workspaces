@@ -128,7 +128,7 @@ Item { // Window
     opacity: root.anyPreviewContent || root.showingFreeze || root.captureAttempt >= 8 ? 1 : 0
 
     Behavior on opacity {
-        NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: 40; easing.type: Easing.OutCubic }
     }
 
     function holdCurrentPosition() {
@@ -212,7 +212,11 @@ Item { // Window
         // Keep the original grab-to-image behavior. Quickshell may return a
         // non-file image URL, which Image can use while ScreencopyView is
         // being replaced during a drag.
-        if (!root.anyPreviewContent)
+        // During panel/plugin teardown the item can still report content for
+        // one event-loop turn after it has lost its window. QQuickItem refuses
+        // grabToImage in that state; more importantly, calling into the old
+        // scene graph during hot reload can keep the shared shell busy.
+        if (!root.anyPreviewContent || !previewHost.window)
             return;
         previewHost.grabToImage(result => {
             if (result?.url)

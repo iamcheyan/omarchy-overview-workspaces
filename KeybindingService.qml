@@ -10,6 +10,22 @@ Item {
     property var shell: null
     property string appliedMode: ""
     property bool restoring: false
+    property bool destroying: false
+    property string bindingOwner: ""
+
+    // Never queue a callback that captures this service. The host destroys and
+    // recreates all plugin entry points during a hot reload; an owned Timer is
+    // cancelled with this object, while a queued method callback can
+    // survive long enough to call into an invalid QML context.
+    Timer {
+        id: applyBindingsTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (!root.destroying)
+                root.applyBindings();
+        }
+    }
 
     // Hyprland removes runtime bindings while processing `configreloaded`.
     // Reinstall after the reload has settled, otherwise the service can keep
@@ -73,7 +89,7 @@ Item {
         return root.workspaceNumberCommands(false);
     }
 
-    function bindingScript(optimized) {
+    function bindingScript(optimized, ownerToken) {
         const commands = [
             'hl.layer_rule({ name = "overview-instant", match = { namespace = "^quickshell:overview$" }, no_anim = true, animation = "none" })',
             // These are the plugin's own expressions. Do not add unrelated
@@ -96,6 +112,7 @@ Item {
         commands.push('hl.bind("SUPER + SHIFT + TAB", hl.dsp.global("quickshell:overviewPrev"), { description = "Overview workspace previous" })');
         commands.push('hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
         commands.push('hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:overviewCommit"), { release = true, description = "Overview workspace commit" })');
+        commands.push(`_G.hancoreOverviewBindingOwner = "${ownerToken}"`);
         // Native mode does not own Win+number. Never unbind or recreate those
         // keys there; they may be user-defined rather than Omarchy defaults.
         return optimized
@@ -103,8 +120,8 @@ Item {
             : commands.join("; ");
     }
 
-    function transitionScript(previousMode, nextMode) {
-        const commands = [root.bindingScript(nextMode === "legacy")];
+    function transitionScript(previousMode, nextMode, ownerToken) {
+        const commands = [root.bindingScript(nextMode === "legacy", ownerToken)];
         // Only a live legacy -> system transition proves that these number
         // bindings belong to this service. Restore the native mappings during
         // that handoff; a fresh system-mode start must leave user mappings alone.
@@ -115,7 +132,7 @@ Item {
     }
 
     function applyBindings() {
-        if (!root.shell)
+        if (root.destroying || !root.shell)
             return;
         root.migrateLegacyDuplicateWidget();
         const mode = root.configuredMode();
@@ -129,17 +146,24 @@ Item {
         if (root.appliedMode === mode)
             return;
         root.restoring = false;
+        root.bindingOwner = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
         bindingApplyGuard.restart();
-        Quickshell.execDetached(["hyprctl", "eval", root.transitionScript(root.appliedMode, mode)]);
+        Quickshell.execDetached(["hyprctl", "eval", root.transitionScript(root.appliedMode, mode, root.bindingOwner)]);
         root.appliedMode = mode;
+    }
+
+    function scheduleApplyBindings() {
+        if (!root.destroying)
+            applyBindingsTimer.restart();
     }
 
     function restoreBindings() {
         if (root.restoring)
             return;
         root.restoring = true;
+        const ownerToken = root.bindingOwner;
         const commands = [
-            'if _G.hancoreOverviewSuperListener then _G.hancoreOverviewSuperListener:remove(); _G.hancoreOverviewSuperListener = nil end',
+            `if _G.hancoreOverviewBindingOwner == "${ownerToken}" then _G.hancoreOverviewBindingOwner = nil; if _G.hancoreOverviewSuperListener then _G.hancoreOverviewSuperListener:remove(); _G.hancoreOverviewSuperListener = nil end`,
             '_G.hancoreOverviewSuperDown = nil',
             'hl.unbind("SUPER_L")',
             'hl.unbind("SUPER_R")',
@@ -153,20 +177,21 @@ Item {
                 commands.push(command);
         commands.push('hl.bind("SUPER + TAB", hl.dsp.focus({ workspace = "e+1" }), { description = "Next workspace" })');
         commands.push('hl.bind("SUPER + SHIFT + TAB", hl.dsp.focus({ workspace = "e-1" }), { description = "Previous workspace" })');
+        commands.push('end');
         Quickshell.execDetached(["hyprctl", "eval", commands.join("; ")]);
     }
 
-    Component.onCompleted: Qt.callLater(root.applyBindings)
-    onShellChanged: Qt.callLater(root.applyBindings)
+    Component.onCompleted: root.scheduleApplyBindings()
+    onShellChanged: root.scheduleApplyBindings()
 
     Connections {
         target: root.shell
         ignoreUnknownSignals: true
         function onBarConfigChanged() {
-            Qt.callLater(root.applyBindings);
+            root.scheduleApplyBindings();
         }
         function onShellConfigChanged() {
-            Qt.callLater(root.applyBindings);
+            root.scheduleApplyBindings();
         }
     }
 
@@ -184,5 +209,11 @@ Item {
         }
     }
 
-    Component.onDestruction: root.restoreBindings()
+    Component.onDestruction: {
+        root.destroying = true;
+        applyBindingsTimer.stop();
+        reapplyAfterReload.stop();
+        bindingApplyGuard.stop();
+        root.restoreBindings();
+    }
 }

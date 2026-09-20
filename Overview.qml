@@ -36,6 +36,16 @@ Scope {
 
     signal requestOverviewFocus()
 
+    // Focus requests are deferred until the panel window is mapped. Keep the
+    // deferred work owned by the panel instead of queueing a closure that can
+    // outlive the panel during plugin hot reload.
+    Timer {
+        id: overviewFocusTimer
+        interval: 0
+        repeat: false
+        onTriggered: overviewKeyHandler.forceActiveFocus()
+    }
+
     function navigateOverviewByIndex(delta) {
         WorkspaceNavigation.navigateByIndex(delta);
     }
@@ -447,7 +457,7 @@ Scope {
                             && panelWindow.isFocusedOverviewWindow
                             && GlobalStates.overviewOpen
                             && !OverviewSwitchingController.grabbed)
-                            Qt.callLater(() => { overviewKeyHandler.forceActiveFocus(); });
+                            overviewFocusTimer.restart();
                     }
                     function onSuperDownChanged() {
                         if (OverviewSwitchingController.grabbed && !GlobalStates.superDown)

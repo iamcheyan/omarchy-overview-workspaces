@@ -89,6 +89,13 @@ BarWidget {
         settingsPanelLoader.item.hostWidget = root;
     }
 
+    Timer {
+        id: injectPanelTimer
+        interval: 0
+        repeat: false
+        onTriggered: root.injectPanel()
+    }
+
     implicitWidth: (root.mruEnabled ? mruLabel.implicitWidth : workspaceRow.implicitWidth)
         + button.implicitWidth
     implicitHeight: button.implicitHeight
@@ -111,7 +118,7 @@ BarWidget {
         active: true
         source: Qt.resolvedUrl("../SettingsPanel.qml")
         visible: false
-        onLoaded: { root.injectPanel(); Qt.callLater(root.injectPanel); }
+        onLoaded: { root.injectPanel(); injectPanelTimer.restart(); }
     }
 
     WidgetButton {

@@ -51,6 +51,10 @@ Singleton {
     property bool screenUnlockFailed: false
     property bool superDown: false
     property bool superReleaseMightTrigger: false
+    // Open Overview on Super-down for a responsive standalone key press. If
+    // another key arrives, the input listener closes this speculative open
+    // before the chord's own binding handles it.
+    property bool overviewOpenedBySuperDown: false
     // The overview process is pre-warmed separately from the bar. During its
     // short startup window, a compositor-delivered Super release must not be
     // mistaken for a user request to open Overview.
@@ -163,14 +167,28 @@ Singleton {
             if (data === "hancore-overview-super,down") {
                 root.superDown = true;
                 root.superReleaseMightTrigger = true;
+                if (!GlobalStates.overviewOpen && !root.overviewWarmStart) {
+                    GlobalStates.overviewOpen = true;
+                    root.overviewOpenedBySuperDown = true;
+                }
             } else if (data === "hancore-overview-super,interrupt") {
+                if (root.overviewOpenedBySuperDown) {
+                    root.overviewOpenedBySuperDown = false;
+                    GlobalStates.overviewOpen = false;
+                }
                 root.superReleaseMightTrigger = false;
             } else if (data === "hancore-overview-super,tap" || data === "hancore-overview-super,up") {
                 const grabbed = root.overviewSwitchingController?.grabbed ?? false;
                 root.superDown = false;
                 if (grabbed) {
+                    root.overviewOpenedBySuperDown = false;
                     root.superReleaseMightTrigger = false;
                     root.overviewSwitchingController.commitGrabbedMode();
+                } else if (root.overviewOpenedBySuperDown) {
+                    // The overview was already shown on Super-down. Do not
+                    // toggle it again when the standalone key is released.
+                    root.overviewOpenedBySuperDown = false;
+                    root.superReleaseMightTrigger = false;
                 } else if (data.endsWith(",tap") && root.superReleaseMightTrigger && !root.overviewWarmStart) {
                     root.superReleaseMightTrigger = false;
                     if (!GlobalStates.overviewOpen)

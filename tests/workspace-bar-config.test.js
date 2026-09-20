@@ -92,18 +92,42 @@ test('QML listens to both scoped and legacy config signals without warnings', ()
     assert.match(source, /ignoreUnknownSignals:\s*true/);
     assert.match(source, /function onBarConfigChanged\(\)/);
     assert.match(source, /function onShellConfigChanged\(\)/);
-    assert.match(source, /transitionScript\(root\.appliedMode, mode\)/);
+    assert.match(source, /transitionScript\(root\.appliedMode, mode, root\.bindingOwner\)/);
     assert.match(source, /requiresNativeWorkspaceNumberRestore\(previousMode, nextMode\)/);
     assert.equal((source.match(/hancoreOverviewSuperListener:remove\(\)/g) ?? []).length, 2);
     assert.match(source, /hancoreOverviewSuperListener = nil/);
     assert.match(source, /hancoreOverviewSuperDown = nil/);
     assert.doesNotMatch(source, /hyprctl[^\n]*reload|reload[^\n]*hyprctl/);
 });
+test('opens Overview on Super-down and cancels speculative opens for chords', () => {
+    const source = fs.readFileSync(require.resolve('../GlobalStates.qml'), 'utf8');
+    assert.match(source, /property bool overviewOpenedBySuperDown: false/);
+    assert.match(source, /data === "hancore-overview-super,down"[\s\S]*GlobalStates\.overviewOpen = true/);
+    assert.match(source, /data === "hancore-overview-super,interrupt"[\s\S]*GlobalStates\.overviewOpen = false/);
+    assert.match(source, /overviewOpenedBySuperDown[\s\S]*Do not[\s\S]*toggle it again/);
+});
 test('guards the binding transaction against its own configreloaded event', () => {
     const source = fs.readFileSync(require.resolve('../KeybindingService.qml'), 'utf8');
     assert.match(source, /id: bindingApplyGuard/);
     assert.match(source, /bindingApplyGuard\.restart\(\)/);
     assert.match(source, /if \(bindingApplyGuard\.running\)/);
+    assert.match(source, /property string bindingOwner/);
+    assert.match(source, /hancoreOverviewBindingOwner/);
+    assert.match(source, /root\.destroying = true/);
+});
+test('keeps deferred plugin work owned by the component lifecycle', () => {
+    const files = [
+        '../KeybindingService.qml',
+        '../Overview.qml',
+        '../OverviewSearch.qml',
+        '../OverviewSwitchingController.qml',
+        '../MenuSearch.qml',
+        '../bar/widget.qml'
+    ];
+    for (const file of files) {
+        const source = fs.readFileSync(require.resolve(file), 'utf8');
+        assert.doesNotMatch(source, /Qt\.callLater/);
+    }
 });
 test('coalesces Overview model reconciliation inside the widget lifecycle', () => {
     const source = fs.readFileSync(require.resolve('../OverviewWidget.qml'), 'utf8');

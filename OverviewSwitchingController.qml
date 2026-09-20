@@ -13,6 +13,31 @@ Singleton {
     property bool cycleQueued: false
     property int cycleDelta: 0
 
+    Timer {
+        id: cycleTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            const delta = root.cycleDelta;
+            root.cycleDelta = 0;
+            root.cycleQueued = false;
+            if (!GlobalStates.overviewOpen || !root.grabbed || delta === 0)
+                return;
+            WorkspaceNavigation.navigateByIndex(delta);
+        }
+    }
+
+    Timer {
+        id: focusTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            root.focusQueued = false;
+            if (GlobalStates.overviewOpen)
+                root.requestFocus();
+        }
+    }
+
     // Self-register into GlobalStates so the Super-release shortcut (owned by
     // the core qs root singleton) can drive switching mode without a core→module
     // import. Runs only in processes that load this overview module.
@@ -30,16 +55,7 @@ Singleton {
             return;
 
         root.cycleQueued = true;
-        Qt.callLater(() => {
-            const delta = root.cycleDelta;
-            root.cycleDelta = 0;
-            root.cycleQueued = false;
-
-            if (!GlobalStates.overviewOpen || !root.grabbed || delta === 0)
-                return;
-
-            WorkspaceNavigation.navigateByIndex(delta);
-        });
+        cycleTimer.restart();
     }
 
     function queueFocus() {
@@ -47,11 +63,7 @@ Singleton {
             return;
 
         root.focusQueued = true;
-        Qt.callLater(() => {
-            root.focusQueued = false;
-            if (GlobalStates.overviewOpen)
-                root.requestFocus();
-        });
+        focusTimer.restart();
     }
 
     function openGrabbedMode(dir) {
@@ -80,5 +92,7 @@ Singleton {
         root.focusQueued = false;
         root.cycleQueued = false;
         root.cycleDelta = 0;
+        cycleTimer.stop();
+        focusTimer.stop();
     }
 }
